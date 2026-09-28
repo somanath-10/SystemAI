@@ -195,6 +195,7 @@ class EventStore:
         }
 
     def list_events(self, *, task_id: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
+        limit = min(max(int(limit), 1), 1_000)
         sql = "SELECT * FROM events"
         args: list[Any] = []
         if task_id:

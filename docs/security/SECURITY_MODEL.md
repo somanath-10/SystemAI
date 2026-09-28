@@ -108,6 +108,7 @@ V1 sandbox commands:
 - cannot contain shell-metacharacter command strings;
 - are limited to an explicit binary allowlist;
 - use a cleaned environment that drops obvious secret variables;
+- require an isolated Docker backend (configure `SYSTEMAI_SANDBOX_IMAGE` for the project runtime) with network disabled;
 - fail closed when the requested isolation profile cannot be technically enforced.
 
 A generic unrestricted host shell is not a V1 tool.

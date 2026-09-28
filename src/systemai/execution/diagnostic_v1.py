@@ -16,10 +16,28 @@ from systemai.diagnostics.ports import listening_connections
 from systemai.diagnostics.project_inspector import project_path
 from systemai.execution.authorized import AuthorizedExecutor
 
+MAX_LOG_BYTES = 1_000_000
+MAX_LOG_FILES = 100
+
+
+def _bounded_int(value: object, *, default: int, maximum: int, name: str) -> int:
+    try:
+        result = int(default if value is None else value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not 1 <= result <= maximum:
+        raise ValueError(f"{name} must be between 1 and {maximum}")
+    return result
+
 
 def _run(argv: list[str], *, cwd: Path | None = None, timeout: float = 5.0) -> tuple[int, str, str]:
-    cp = subprocess.run(argv, cwd=str(cwd) if cwd else None, text=True, capture_output=True, timeout=timeout, check=False, env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
-    return cp.returncode, cp.stdout, cp.stderr
+    try:
+        cp = subprocess.run(argv, cwd=str(cwd) if cwd else None, text=True, capture_output=True, timeout=timeout, check=False, env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
+        return cp.returncode, cp.stdout, cp.stderr
+    except FileNotFoundError as exc:
+        return 127, "", str(exc)
+    except subprocess.TimeoutExpired as exc:
+        return 124, exc.stdout or "", exc.stderr or str(exc)
 
 
 def _env_keys(path: Path) -> list[str]:
@@ -161,16 +179,18 @@ class DiagnosticExecutorV1(AuthorizedExecutor):
         paths = [Path(x) for x in action.parameters.get("log_files", [])]
         if not paths:
             paths = list(root.glob("*.log")) + list((root / "logs").glob("*.log")) if (root / "logs").exists() else list(root.glob("*.log"))
-        max_files = int(action.parameters.get("max_files", 10))
-        max_bytes = int(action.parameters.get("max_bytes_per_file", 16_000))
+        max_files = _bounded_int(action.parameters.get("max_files"), default=10, maximum=MAX_LOG_FILES, name="max_files")
+        max_bytes = _bounded_int(action.parameters.get("max_bytes_per_file"), default=16_000, maximum=MAX_LOG_BYTES, name="max_bytes_per_file")
         logs = []
-        for p in paths[:max_files]:
-            p = project_path(root, p)
+        for item in paths[:max_files]:
+            p = project_path(root, item)
             if not p.exists() or not p.is_file():
                 continue
-            data = p.read_bytes()
-            tail = data[-max_bytes:].decode(errors="replace")
-            logs.append({"path": str(p), "size": len(data), "tail": tail})
+            size = p.stat().st_size
+            with p.open("rb") as handle:
+                handle.seek(max(0, size - max_bytes))
+                tail = handle.read(max_bytes).decode(errors="replace")
+            logs.append({"path": str(p), "size": size, "tail": tail})
         return {"logs": logs}
 
     def _ports(self, action: ActionIntent) -> dict:
@@ -224,10 +244,12 @@ class DiagnosticExecutorV1(AuthorizedExecutor):
         port = action.parameters.get("port") or (action.target.port if action.target else None)
         if port is None:
             return {"reachable": False, "reason": "database.inspect requires a port or a specific adapter"}
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(float(action.parameters.get("timeout", 1.0)))
+        timeout = float(action.parameters.get("timeout", 1.0))
+        if not 0 < timeout <= 30:
+            raise ValueError("timeout must be between 0 and 30 seconds")
         try:
-            result = sock.connect_ex((host, int(port)))
-            return {"host": host, "port": int(port), "reachable": result == 0, "mode": "tcp-health-only"}
-        finally:
-            sock.close()
+            with socket.create_connection((host, int(port)), timeout=timeout):
+                pass
+            return {"host": host, "port": int(port), "reachable": True, "mode": "tcp-health-only"}
+        except OSError:
+            return {"host": host, "port": int(port), "reachable": False, "mode": "tcp-health-only"}

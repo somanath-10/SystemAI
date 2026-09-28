@@ -9,6 +9,19 @@ from uuid import uuid4
 from systemai.contracts.models import ActionIntent, ActionResult
 from systemai.execution.authorized import AuthorizedExecutor
 
+MAX_READ_BYTES = 1_000_000
+MAX_DIRECTORY_ENTRIES = 5_000
+
+
+def _bounded_int(value: object, *, default: int, maximum: int, name: str) -> int:
+    try:
+        result = int(default if value is None else value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not 1 <= result <= maximum:
+        raise ValueError(f"{name} must be between 1 and {maximum}")
+    return result
+
 
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -37,12 +50,15 @@ class FileSystemExecutorV1(AuthorizedExecutor):
             out: dict = {"path": str(path)}
             side_effects: list[str] = []
             if action.capability == "file.read":
-                max_bytes = int(action.parameters.get("max_bytes", 512_000))
-                data = path.read_bytes()[:max_bytes]
-                out.update({"text": data.decode(action.parameters.get("encoding", "utf-8"), errors="replace"), "size": path.stat().st_size, "sha256": sha256_file(path)})
+                max_bytes = _bounded_int(action.parameters.get("max_bytes"), default=512_000, maximum=MAX_READ_BYTES, name="max_bytes")
+                size = path.stat().st_size
+                with path.open("rb") as handle:
+                    data = handle.read(max_bytes)
+                out.update({"text": data.decode(action.parameters.get("encoding", "utf-8"), errors="replace"), "size": size, "sha256": sha256_file(path) if size <= MAX_READ_BYTES else None, "truncated": size > len(data)})
             elif action.capability == "directory.list":
+                limit = _bounded_int(action.parameters.get("limit"), default=500, maximum=MAX_DIRECTORY_ENTRIES, name="limit")
                 entries = []
-                for p in sorted(path.iterdir(), key=lambda x: x.name)[: int(action.parameters.get("limit", 500))]:
+                for p in sorted(path.iterdir(), key=lambda x: x.name)[:limit]:
                     entries.append({"name": p.name, "path": str(p), "is_dir": p.is_dir(), "size": None if p.is_dir() else p.stat().st_size})
                 out["entries"] = entries
             elif action.capability == "directory.create":
@@ -56,11 +72,18 @@ class FileSystemExecutorV1(AuthorizedExecutor):
                     shutil.copy2(path, backup_path)
                 if "content" not in action.parameters:
                     raise ValueError("file.write requires parameters.content")
-                path.write_text(str(action.parameters["content"]), encoding=str(action.parameters.get("encoding", "utf-8")))
+                temporary = path.with_name(f".{path.name}.systemai-write-{uuid4().hex[:8]}")
+                try:
+                    temporary.write_text(str(action.parameters["content"]), encoding=str(action.parameters.get("encoding", "utf-8")))
+                    temporary.replace(path)
+                finally:
+                    temporary.unlink(missing_ok=True)
                 out.update({"sha256": sha256_file(path), "backup_path": str(backup_path) if backup_path else None})
                 side_effects.append(f"wrote file {path}")
             elif action.capability == "file.move":
                 destination = Path(str(action.parameters["destination"])).expanduser().resolve(strict=False)
+                if destination.exists():
+                    raise FileExistsError(f"destination already exists: {destination}")
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(path), str(destination))
                 out.update({"destination": str(destination), "sha256": sha256_file(destination) if destination.is_file() else None})

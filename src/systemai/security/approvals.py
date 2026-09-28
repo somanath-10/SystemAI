@@ -55,9 +55,12 @@ class ApprovalStore:
 
     def decide(self, approval_id: str, *, approved: bool, approved_by: str, reason: str | None = None) -> None:
         with self._connect() as c:
-            row = c.execute("SELECT approval_id FROM approvals WHERE approval_id=?", (approval_id,)).fetchone()
+            c.execute("BEGIN IMMEDIATE")
+            row = c.execute("SELECT approved FROM approvals WHERE approval_id=?", (approval_id,)).fetchone()
             if not row:
                 raise KeyError(approval_id)
+            if row["approved"] is not None:
+                raise ValueError("approval is already decided")
             c.execute(
                 "UPDATE approvals SET approved=?, approved_by=?, reason=COALESCE(?, reason), decided_at=? WHERE approval_id=?",
                 (1 if approved else 0, approved_by, reason, _now(), approval_id),

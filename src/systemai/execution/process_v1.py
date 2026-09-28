@@ -28,6 +28,8 @@ class ProcessExecutorV1(AuthorizedExecutor):
         try:
             if action.capability == "process.list":
                 limit = int(action.parameters.get("limit", 500))
+                if not 1 <= limit <= 5_000:
+                    raise ValueError("limit must be between 1 and 5000")
                 items = []
                 for proc in psutil.process_iter(["pid", "name", "cmdline", "cwd", "username"]):
                     try:
@@ -78,13 +80,16 @@ class ProcessExecutorV1(AuthorizedExecutor):
                     raise RuntimeError("PID was reused; refusing to terminate a different process")
                 sig = signal.SIGTERM
                 p.send_signal(sig)
+                timeout = float(action.parameters.get("timeout", 5))
+                if not 0 < timeout <= 30:
+                    raise ValueError("timeout must be between 0 and 30 seconds")
                 try:
-                    p.wait(timeout=float(action.parameters.get("timeout", 5)))
+                    await asyncio.to_thread(p.wait, timeout=timeout)
                 except psutil.TimeoutExpired:
                     if not action.parameters.get("allow_kill", False):
                         raise RuntimeError("process did not exit after SIGTERM; kill not authorized")
                     p.kill()
-                    p.wait(timeout=3)
+                    await asyncio.to_thread(p.wait, timeout=3)
                 output = {"pid": pid, "terminated": True}
             else:
                 raise ValueError(action.capability)

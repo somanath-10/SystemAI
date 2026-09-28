@@ -6,7 +6,6 @@ from systemai.contracts.desktop import (
     DesktopApplication,
     DesktopDriverStatus,
     DesktopElement,
-    DesktopPermissionStatus,
     DesktopSnapshot,
     DesktopWindow,
 )

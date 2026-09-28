@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 from uuid import uuid4
@@ -28,6 +27,8 @@ class ResourceLeaseManager:
         self.store = store
 
     def acquire_many(self, resources: Iterable[str], *, task_id: str, node_id: str | None, ttl_seconds: int = 30) -> list[ResourceLease]:
+        if ttl_seconds <= 0:
+            raise ValueError("lease TTL must be positive")
         resources = sorted(set(resources))  # global ordering prevents lock-order deadlocks
         if not resources:
             return []
@@ -63,10 +64,17 @@ class ResourceLeaseManager:
         return leases
 
     def renew(self, lease_id: str, *, ttl_seconds: int = 30) -> ResourceLease:
-        expires = _now() + timedelta(seconds=ttl_seconds)
+        if ttl_seconds <= 0:
+            raise ValueError("lease TTL must be positive")
+        now = _now()
+        expires = now + timedelta(seconds=ttl_seconds)
         with self.store.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
             row = c.execute("SELECT * FROM resource_leases WHERE lease_id=?", (lease_id,)).fetchone()
             if not row:
+                raise KeyError(lease_id)
+            if _dt(row["expires_at"]) <= now:
+                c.execute("DELETE FROM resource_leases WHERE lease_id=?", (lease_id,))
                 raise KeyError(lease_id)
             c.execute("UPDATE resource_leases SET expires_at=? WHERE lease_id=?", (expires.isoformat(), lease_id))
         return ResourceLease(

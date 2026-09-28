@@ -2,6 +2,7 @@ import json
 import sys
 from pathlib import Path
 
+import psutil
 import pytest
 
 from systemai.contracts.models import ActionJournalStatus
@@ -43,3 +44,33 @@ async def test_interrupted_action_cannot_be_resumed_without_reconciliation(tmp_p
     runtime.pause(session.task_id)
     with pytest.raises(ValueError, match="manual reconciliation"):
         await runtime.resume(session.task_id)
+
+
+@pytest.mark.asyncio
+async def test_resource_wait_resumes_after_the_lease_is_released(tmp_path: Path):
+    project = tmp_path / "project"
+    (project / ".systemai").mkdir(parents=True)
+    (project / ".systemai" / "project.json").write_text(
+        json.dumps({"name": "project", "runtime": "python", "start": [sys.executable, "-c", "import time; time.sleep(5)"]})
+    )
+    runtime = build_v1_runtime(data_dir=tmp_path / "runtime")
+    session = await runtime.create_developer_task("Start the project", project)
+    action_id = next(iter(session.pending_approvals))
+    lease = runtime.leases.acquire_many([f"filesystem:{project}"], task_id="other", node_id="other")[0]
+    runtime.approve(session.task_id, action_id, approved=True)
+    try:
+        session = await runtime.run(session.task_id)
+        assert session.state.value == "waiting_for_resource"
+        runtime.leases.release(lease.lease_id)
+        session = await runtime.resume(session.task_id)
+        assert session.state.value == "completed"
+    finally:
+        runtime.leases.release(lease.lease_id)
+        result = session.results.get(next(iter(session.graph.nodes.values())).action.action_id)
+        if result and result.output.get("pid"):
+            try:
+                proc = psutil.Process(result.output["pid"])
+                proc.terminate()
+                proc.wait(timeout=3)
+            except psutil.NoSuchProcess:
+                pass

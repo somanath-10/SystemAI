@@ -29,6 +29,10 @@ class DeveloperDiagnosisEngineV1:
         hypotheses: list[Hypothesis] = []
         actions: list[ActionIntent] = []
 
+        if facts.get("manifest_error"):
+            hypotheses.append(Hypothesis(code="invalid_manifest", cause=str(facts["manifest_error"]), confidence=1.0, status="confirmed"))
+            return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project manifest is invalid; V1 will not infer commands or paths from it.")
+
         if facts["manifest_issues"]:
             issues = "; ".join(facts["manifest_issues"])
             hypotheses.append(Hypothesis(code="unsafe_manifest", cause=issues, confidence=1.0, status="confirmed"))
@@ -73,7 +77,6 @@ class DeveloperDiagnosisEngineV1:
             hypotheses.append(Hypothesis(code="missing_start_contract", cause="No explicit start command is available in the project manifest or auto-detection.", confidence=0.95, status="confirmed"))
             return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Diagnosis found the project is unhealthy, but no safe start command is declared; no repair action will run.")
 
-        dependencies = {"repair-port-conflict"} if actions and actions[-1].node_id == "repair-port-conflict" else set()
         start_action = ActionIntent(
             task_id=task_id,
             node_id="start-project",

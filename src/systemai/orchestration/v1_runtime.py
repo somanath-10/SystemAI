@@ -128,7 +128,7 @@ class SystemAIV1Runtime:
         task_id = f"task_{uuid4().hex[:16]}"
         contract = self.planner.goal_contract(goal, project_root, actor_id=actor_id)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
-        graph, report = self.planner.plan(task_id=task_id, contract=contract, project_root=project_root)
+        graph, report = await asyncio.to_thread(self.planner.plan, task_id=task_id, contract=contract, project_root=project_root)
         diagnosis = report.model_dump(mode="json")
         self.store.append("ObservationReceived", {"kind": "developer_diagnosis", "summary": report.summary, "facts": self._redacted_facts(diagnosis.get("facts", {}))}, task_id=task_id)
         self.store.append("PlanCreated", {"nodes": graph.topological_order() if graph.nodes else [], "diagnosis": report.summary}, task_id=task_id)
@@ -191,7 +191,7 @@ class SystemAIV1Runtime:
         leases = []
         try:
             try:
-                leases = self.leases.acquire_many(node.resource_requirements, task_id=session.task_id, node_id=node.node_id, ttl_seconds=max(30, node.time_budget_seconds))
+                leases = self.leases.acquire_many(node.resource_requirements, task_id=session.task_id, node_id=node.node_id, ttl_seconds=max(30, node.time_budget_seconds + 30))
             except ResourceBusy as exc:
                 node.state = StepState.WAITING_FOR_RESOURCE
                 node.last_error = str(exc)
@@ -325,15 +325,18 @@ class SystemAIV1Runtime:
 
     async def resume(self, task_id: str) -> V1TaskSession:
         session = self.sessions[task_id]
-        if session.state != TaskState.PAUSED:
-            raise ValueError("task is not paused")
+        if session.state not in {TaskState.PAUSED, TaskState.WAITING_FOR_RESOURCE}:
+            raise ValueError("task is not paused or waiting for a resource")
         if any(
             (journal := self.journal.get(node.action.action_id))
             and journal["status"] == ActionJournalStatus.COMMIT_STATUS_UNKNOWN.value
             for node in session.graph.nodes.values()
         ):
             raise ValueError("manual reconciliation is required for an interrupted action")
-        if session.pending_approvals:
+        for node in session.graph.nodes.values():
+            if node.state == StepState.WAITING_FOR_RESOURCE:
+                node.state = StepState.PENDING
+        if self._has_undecided_approvals(session):
             session.state = TaskState.WAITING_FOR_APPROVAL
             self._persist(session)
             return session
@@ -395,7 +398,7 @@ class SystemAIV1Runtime:
                     session.error = "manual reconciliation is required for an interrupted action"
                     self.store.append("TaskRecoveryRequired", {"actions": [node.action.action_id for node in unsafe]}, task_id=session.task_id)
                     self._persist(session)
-                elif session.state in {TaskState.RUNNING, TaskState.VERIFYING, TaskState.RECOVERING, TaskState.REPLANNING, TaskState.WAITING_FOR_RESOURCE}:
+                elif session.state in {TaskState.RUNNING, TaskState.VERIFYING, TaskState.RECOVERING, TaskState.REPLANNING, TaskState.WAITING_FOR_RESOURCE, TaskState.READY} or (session.state == TaskState.WAITING_FOR_APPROVAL and not self._has_undecided_approvals(session)):
                     for node in graph.nodes.values():
                         if node.state == StepState.WAITING_FOR_RESOURCE:
                             node.state = StepState.PENDING
@@ -431,6 +434,12 @@ class SystemAIV1Runtime:
         for node in session.graph.nodes.values():
             self.store.upsert_node(session.task_id, node.node_id, node.state.value, {"title": node.title, "action": node.action.model_dump(mode="json"), "dependencies": sorted(node.dependencies), "resources": sorted(node.resource_requirements), "attempts": node.attempts, "last_error": node.last_error})
         self.store.replace_edges(session.task_id, session.graph.edges())
+
+    def _has_undecided_approvals(self, session: V1TaskSession) -> bool:
+        return any(
+            not (record := self.security_kernel.approvals.get(approval_id)) or record["approved"] is None
+            for approval_id in session.pending_approvals.values()
+        )
 
     @staticmethod
     def _redacted_facts(facts: dict[str, Any]) -> dict[str, Any]:

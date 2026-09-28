@@ -14,13 +14,45 @@ from systemai.execution.environment import clean_environment
 DEFAULT_ALLOWED_BINARIES = {
     "python", "python3", "pytest", "node", "npm", "pnpm", "yarn", "git", "cargo", "go", "java", "mvn", "gradle",
 }
+MAX_TIMEOUT_SECONDS = 300.0
+MAX_OUTPUT_BYTES = 1_000_000
+
+
+def _bounded_float(value: object, *, default: float, maximum: float, name: str) -> float:
+    try:
+        result = float(default if value is None else value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number") from exc
+    if not 0 < result <= maximum:
+        raise ValueError(f"{name} must be between 0 and {maximum}")
+    return result
+
+
+def _bounded_int(value: object, *, default: int, maximum: int, name: str) -> int:
+    try:
+        result = int(default if value is None else value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not 1 <= result <= maximum:
+        raise ValueError(f"{name} must be between 1 and {maximum}")
+    return result
+
+
+async def _read_limited(stream: asyncio.StreamReader, limit: int) -> tuple[bytes, bool]:
+    output = bytearray()
+    truncated = False
+    while chunk := await stream.read(65_536):
+        remaining = limit - len(output)
+        output.extend(chunk[:remaining])
+        truncated |= len(chunk) > remaining
+    return bytes(output), truncated
 
 
 class SandboxExecutorV1(AuthorizedExecutor):
     """V1 bounded command worker.
 
-    It intentionally fails closed for profiles requiring network isolation when no
-    enforceable backend (Docker/bwrap/firejail) is available. It never accepts a
+    It fails closed whenever an isolated Docker backend is unavailable.
+    It never accepts a
     shell command string; argv is executed directly with shell=False semantics.
     """
 
@@ -47,19 +79,32 @@ class SandboxExecutorV1(AuthorizedExecutor):
             cwd = Path(str(action.parameters.get("cwd") or (action.target.path if action.target else "."))).expanduser().resolve(strict=True)
             profile = SandboxProfile(str(action.parameters.get("profile", SandboxProfile.READ_ONLY.value)))
             backend = self._backend_for(profile)
-            if profile in {SandboxProfile.WORKSPACE_WRITE_NO_NETWORK, SandboxProfile.WORKSPACE_WRITE_ALLOWLIST_NETWORK, SandboxProfile.TEMPORARY_CONTAINER_OR_VM} and backend == "none":
+            if profile in {SandboxProfile.WORKSPACE_WRITE_ALLOWLIST_NETWORK, SandboxProfile.APPROVED_ELEVATED_HOST_OPERATION}:
+                raise RuntimeError(f"V1 cannot enforce sandbox profile '{profile.value}'")
+            if backend == "none":
                 raise RuntimeError(f"requested sandbox profile '{profile.value}' cannot be enforced on this host; fail closed")
-            timeout = float(action.parameters.get("timeout", 120))
+            timeout = _bounded_float(action.parameters.get("timeout"), default=120, maximum=MAX_TIMEOUT_SECONDS, name="timeout")
+            max_output = _bounded_int(action.parameters.get("max_output_bytes"), default=64_000, maximum=MAX_OUTPUT_BYTES, name="max_output_bytes")
             env = clean_environment(action.parameters.get("env", {}))
             command = self._command(backend, profile, cwd, argv)
             proc = await asyncio.create_subprocess_exec(*command, cwd=str(cwd), env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout_task = asyncio.create_task(_read_limited(proc.stdout, max_output))
+            stderr_task = asyncio.create_task(_read_limited(proc.stderr, max_output))
             try:
-                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+                await asyncio.wait_for(proc.wait(), timeout=timeout)
+            except asyncio.TimeoutError as exc:
                 proc.kill()
                 await proc.wait()
-                raise TimeoutError(f"sandbox command exceeded {timeout}s")
-            max_output = int(action.parameters.get("max_output_bytes", 64_000))
+                await asyncio.gather(stdout_task, stderr_task)
+                raise TimeoutError(f"sandbox command exceeded {timeout}s") from exc
+            except BaseException:
+                if proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
+                await asyncio.gather(stdout_task, stderr_task)
+                raise
+            stdout_b, stdout_truncated = await stdout_task
+            stderr_b, stderr_truncated = await stderr_task
             output = {
                 "argv": argv,
                 "cwd": str(cwd),
@@ -68,6 +113,8 @@ class SandboxExecutorV1(AuthorizedExecutor):
                 "exit_code": proc.returncode,
                 "stdout": stdout_b[:max_output].decode(errors="replace"),
                 "stderr": stderr_b[:max_output].decode(errors="replace"),
+                "stdout_truncated": stdout_truncated,
+                "stderr_truncated": stderr_truncated,
             }
             effect = "confirmed" if proc.returncode == 0 else "failed"
             status = "completed" if proc.returncode == 0 else "failed"
@@ -77,23 +124,14 @@ class SandboxExecutorV1(AuthorizedExecutor):
 
     @staticmethod
     def _backend_for(profile: SandboxProfile) -> str:
-        if profile == SandboxProfile.READ_ONLY:
-            return "bounded-subprocess"
-        if shutil.which("bwrap"):
-            return "bwrap"
         if shutil.which("docker"):
             return "docker"
         return "none"
 
     @staticmethod
     def _command(backend: str, profile: SandboxProfile, cwd: Path, argv: list[str]) -> list[str]:
-        if backend == "bwrap":
-            # Minimal workspace bind. The source tree is ro for READ_ONLY, rw otherwise.
-            bind_flag = "--ro-bind" if profile == SandboxProfile.READ_ONLY else "--bind"
-            return ["bwrap", "--die-with-parent", "--proc", "/proc", "--dev", "/dev", bind_flag, str(cwd), str(cwd), "--chdir", str(cwd), *argv]
         if backend == "docker":
             mode = "ro" if profile == SandboxProfile.READ_ONLY else "rw"
-            network = "none" if profile == SandboxProfile.WORKSPACE_WRITE_NO_NETWORK else "bridge"
             image = os.environ.get("SYSTEMAI_SANDBOX_IMAGE", "python:3.12-slim")
-            return ["docker", "run", "--rm", "--network", network, "-v", f"{cwd}:{cwd}:{mode}", "-w", str(cwd), image, *argv]
+            return ["docker", "run", "--rm", "--network", "none", "-v", f"{cwd}:{cwd}:{mode}", "-w", str(cwd), image, *argv]
         return argv

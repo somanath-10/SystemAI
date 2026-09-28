@@ -11,7 +11,7 @@ from uuid import uuid4
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
-from systemai.contracts.models import ActionIntent, CapabilityTokenClaims, ResourceScope
+from systemai.contracts.models import ActionIntent, CapabilityTokenClaims
 
 
 def _b64url(data: bytes) -> str:
@@ -53,6 +53,10 @@ class CapabilitySigner:
     def load_or_create(cls, path: Path, *, key_id: str = "v1-dev-ed25519") -> "CapabilitySigner":
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
             private = serialization.load_pem_private_key(path.read_bytes(), password=None)
             if not isinstance(private, Ed25519PrivateKey):
                 raise TypeError("capability signing key is not Ed25519")

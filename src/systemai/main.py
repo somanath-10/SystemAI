@@ -5,7 +5,6 @@ import asyncio
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 from systemai.v1 import VERSION, build_v1_runtime

@@ -27,3 +27,13 @@ def test_manifest_cannot_escape_project_or_probe_remote_url(tmp_path: Path):
     assert report.recommended_actions == []
     assert report.hypotheses[0].code == "unsafe_manifest"
     assert "outside project root" in report.hypotheses[0].cause
+
+
+def test_invalid_manifest_stops_without_raising(tmp_path: Path):
+    project = tmp_path / "p"
+    (project / ".systemai").mkdir(parents=True)
+    (project / ".systemai" / "project.json").write_text("{not valid json")
+    report = DeveloperDiagnosisEngineV1().diagnose("t1", project)
+    assert report.recommended_actions == []
+    assert report.hypotheses[0].code == "invalid_manifest"
+    assert "manifest_error" in report.facts

@@ -182,6 +182,8 @@ class SecurityKernelV1:
         url = (action.target.url if action.target else None) or action.parameters.get("url")
         if action.capability == "http.health" and not self._local_health_url(url):
             return None
+        if action.capability == "database.inspect" and str(action.parameters.get("host", "127.0.0.1")) not in {"127.0.0.1", "::1", "localhost"}:
+            return None
         if action.resource_scope:
             return action.resource_scope
         if action.target and action.target.path:

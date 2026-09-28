@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -10,14 +9,20 @@ from urllib.parse import urlsplit
 
 import httpx
 import psutil
+from pydantic import ValidationError
 
 from systemai.contracts.models import ProjectManifest
 from systemai.diagnostics.ports import listening_connections
 
 
 def _run(argv: list[str], cwd: Path, timeout: float = 5.0) -> tuple[int, str, str]:
-    cp = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False)
-    return cp.returncode, cp.stdout, cp.stderr
+    try:
+        cp = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True, timeout=timeout, check=False)
+        return cp.returncode, cp.stdout, cp.stderr
+    except FileNotFoundError as exc:
+        return 127, "", str(exc)
+    except subprocess.TimeoutExpired as exc:
+        return 124, exc.stdout or "", exc.stderr or str(exc)
 
 
 def _env_keys(path: Path) -> list[str]:
@@ -59,6 +64,7 @@ class ProjectInspector:
         candidates = [root / ".systemai" / "project.json", root / "systemai.project.json"]
         for path in candidates:
             if path.exists():
+                path = project_path(root, path)
                 data = json.loads(path.read_text())
                 return ProjectManifest.model_validate(data)
         # conservative auto-detection; never guesses destructive repair steps
@@ -82,9 +88,15 @@ class ProjectInspector:
                 pass
         return ProjectManifest(name=root.name, runtime=runtime, start=start, test=test)
 
+    def _manifest(self, root: Path) -> tuple[ProjectManifest, str | None]:
+        try:
+            return self.load_manifest(root), None
+        except (OSError, ValueError, json.JSONDecodeError, ValidationError) as exc:
+            return ProjectManifest(name=root.name), f"{type(exc).__name__}: {exc}"
+
     def inspect(self, root: Path) -> dict[str, Any]:
         root = root.expanduser().resolve(strict=True)
-        manifest = self.load_manifest(root)
+        manifest, manifest_error = self._manifest(root)
         facts: dict[str, Any] = {
             "project_root": str(root),
             "manifest": manifest.model_dump(mode="json"),
@@ -98,6 +110,8 @@ class ProjectInspector:
             "logs": self._logs(root, manifest.log_files),
             "manifest_issues": self._manifest_issues(root, manifest),
         }
+        if manifest_error:
+            facts["manifest_error"] = manifest_error
         return facts
 
     def _git(self, root: Path) -> dict[str, Any]:
@@ -145,8 +159,13 @@ class ProjectInspector:
         if not local_health_url(url):
             return {"url": url, "reachable": False, "ok": False, "error": "health_url must use a loopback HTTP(S) address"}
         try:
-            r = httpx.get(url, timeout=1.5, follow_redirects=False)
-            return {"url": url, "reachable": True, "status_code": r.status_code, "ok": 200 <= r.status_code < 400, "body": r.text[:2000]}
+            with httpx.stream("GET", url, timeout=1.5, follow_redirects=False) as response:
+                body = bytearray()
+                for chunk in response.iter_bytes():
+                    body.extend(chunk[: 2000 - len(body)])
+                    if len(body) == 2000:
+                        break
+                return {"url": url, "reachable": True, "status_code": response.status_code, "ok": 200 <= response.status_code < 400, "body": bytes(body).decode(errors="replace")}
         except Exception as exc:
             return {"url": url, "reachable": False, "ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -162,10 +181,18 @@ class ProjectInspector:
             if (root / "logs").exists():
                 paths.extend((root / "logs").glob("*.log"))
         out = []
-        for p in paths[:10]:
-            if p.exists() and p.is_file():
-                b = p.read_bytes()
-                out.append({"path": str(p), "tail": b[-16000:].decode(errors="replace"), "size": len(b)})
+        for item in paths[:10]:
+            try:
+                p = project_path(root, item)
+                if not p.exists() or not p.is_file():
+                    continue
+                size = p.stat().st_size
+                with p.open("rb") as handle:
+                    handle.seek(max(0, size - 16_000))
+                    tail = handle.read(16_000)
+                out.append({"path": str(p), "tail": tail.decode(errors="replace"), "size": size})
+            except OSError:
+                continue
         return out
 
     @staticmethod
