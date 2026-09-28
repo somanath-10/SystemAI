@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from systemai.v1 import VERSION, build_v1_runtime
@@ -26,17 +25,6 @@ class ApprovalBody(BaseModel):
 
 def create_app(data_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="SystemAI V1 Local Control API", version=VERSION)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5180",
-            "http://127.0.0.1:5180",
-            "tauri://localhost",
-        ],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
     data_dir = data_dir or Path(os.environ.get("SYSTEMAI_DATA_DIR", str(Path.home() / ".systemai" / "v1")))
     runtime = build_v1_runtime(data_dir=data_dir)
     app.state.runtime = runtime

@@ -15,7 +15,7 @@ def create_api(container: AppContainer | None = None) -> FastAPI:
     app.state.container = container
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5180", "http://127.0.0.1:5180", "tauri://localhost"],
+        allow_origins=["http://localhost:5173", "tauri://localhost"],
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "Authorization"],
