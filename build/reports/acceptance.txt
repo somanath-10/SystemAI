@@ -1,0 +1,24 @@
+
+[controlled fixture approval]
+Capability: process.terminate
+Target: {'process_id': 3922}
+Canonical risk: high
+Reversible: No
+Task: task_80832bb46a1a4f38 / repair-port-conflict
+Reason: Process 3922 releases port 50491
+
+[controlled fixture approval]
+Capability: process.start
+Target: {'path': '/tmp/systemai-v1-acceptance-973svinp/project'}
+Canonical risk: medium
+Reversible: Yes
+Task: task_80832bb46a1a4f38 / start-project
+Reason: Declared project process starts successfully.
+{
+  "status": "PASS",
+  "task_id": "task_80832bb46a1a4f38",
+  "approvals": 2,
+  "event_count": 61,
+  "health_status": 200,
+  "target_pid": 3932
+}

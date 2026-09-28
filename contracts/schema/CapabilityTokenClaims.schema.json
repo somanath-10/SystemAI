@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "ResourceScope": {
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "recursive": {
+          "default": false,
+          "title": "Recursive",
+          "type": "boolean"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "ResourceScope",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "action_hash": {
+      "title": "Action Hash",
+      "type": "string"
+    },
+    "action_id": {
+      "title": "Action Id",
+      "type": "string"
+    },
+    "approval_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Id"
+    },
+    "audience": {
+      "title": "Audience",
+      "type": "string"
+    },
+    "capability_name": {
+      "title": "Capability Name",
+      "type": "string"
+    },
+    "device_id": {
+      "title": "Device Id",
+      "type": "string"
+    },
+    "executor_id": {
+      "title": "Executor Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "issued_at": {
+      "format": "date-time",
+      "title": "Issued At",
+      "type": "string"
+    },
+    "key_id": {
+      "title": "Key Id",
+      "type": "string"
+    },
+    "max_uses": {
+      "default": 1,
+      "title": "Max Uses",
+      "type": "integer"
+    },
+    "node_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Node Id"
+    },
+    "nonce": {
+      "title": "Nonce",
+      "type": "string"
+    },
+    "parameter_hash": {
+      "title": "Parameter Hash",
+      "type": "string"
+    },
+    "provenance_constraints": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Provenance Constraints",
+      "type": "array"
+    },
+    "resource_scope": {
+      "items": {
+        "$ref": "#/$defs/ResourceScope"
+      },
+      "title": "Resource Scope",
+      "type": "array"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    },
+    "version": {
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "key_id",
+    "audience",
+    "executor_id",
+    "device_id",
+    "session_id",
+    "task_id",
+    "action_id",
+    "action_hash",
+    "capability_name",
+    "parameter_hash",
+    "issued_at",
+    "expires_at",
+    "nonce"
+  ],
+  "title": "CapabilityTokenClaims",
+  "type": "object"
+}

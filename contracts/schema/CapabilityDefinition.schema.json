@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "RiskLevel": {
+      "enum": [
+        "observe",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "aliases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "array"
+    },
+    "compensation_strategy": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compensation Strategy"
+    },
+    "dangerous": {
+      "default": false,
+      "title": "Dangerous",
+      "type": "boolean"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "executor": {
+      "title": "Executor",
+      "type": "string"
+    },
+    "idempotent": {
+      "default": false,
+      "title": "Idempotent",
+      "type": "boolean"
+    },
+    "input_schema": {
+      "additionalProperties": true,
+      "title": "Input Schema",
+      "type": "object"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "output_schema": {
+      "additionalProperties": true,
+      "title": "Output Schema",
+      "type": "object"
+    },
+    "requires_permissions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Requires Permissions",
+      "type": "array"
+    },
+    "resource_scope_model": {
+      "default": "task",
+      "title": "Resource Scope Model",
+      "type": "string"
+    },
+    "retry_safe": {
+      "default": false,
+      "title": "Retry Safe",
+      "type": "boolean"
+    },
+    "reversible": {
+      "default": true,
+      "title": "Reversible",
+      "type": "boolean"
+    },
+    "risk": {
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "supported_verifiers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Supported Verifiers",
+      "type": "array"
+    },
+    "supports_idempotency_key": {
+      "default": false,
+      "title": "Supports Idempotency Key",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "risk",
+    "executor"
+  ],
+  "title": "CapabilityDefinition",
+  "type": "object"
+}

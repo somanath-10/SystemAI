@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "VerificationStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "unknown"
+      ],
+      "title": "VerificationStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "action_id": {
+      "title": "Action Id",
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "collateral_checks": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Collateral Checks",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/VerificationStatus"
+    },
+    "summary": {
+      "default": "",
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "action_id",
+    "status"
+  ],
+  "title": "VerificationResult",
+  "type": "object"
+}

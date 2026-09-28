@@ -1,0 +1,35 @@
+{
+  "project": "SystemAI",
+  "version": "1.0.0",
+  "release_scope": "Trusted Core + Developer Diagnosis",
+  "source_of_truth": "docs/source/SystemAI_MASTER_BLUEPRINT_UPDATED.md",
+  "authority_invariant": "GoalContract -> DAG -> Lease -> ActionIntent -> Security Kernel -> Approval -> Signed Capability -> Executor -> Observation -> Verification -> Event/Audit",
+  "status": {
+    "python_runtime": "tested",
+    "v1_end_to_end_acceptance": "passed",
+    "tests_passed": 35,
+    "capabilities_registered": 38,
+    "rust_security_kernel_source": "included_not_compiled_in_build_environment",
+    "command_center_source": "Vite production build tested",
+    "macos_desktop_v2_adapter": "retained_not_part_of_v1_acceptance"
+  },
+  "code_stats": {
+    "python_files": 100,
+    "python_lines": 8071,
+    "rust_files": 5,
+    "rust_lines": 235,
+    "typescript_files": 3,
+    "typescript_lines": 229,
+    "markdown_files": 44,
+    "markdown_lines": 9677,
+    "total_files_excluding_caches": 190
+  },
+  "versions": {
+    "V1": "Trusted Core + Developer Diagnosis",
+    "V2": "macOS Desktop + Browser + Visual Fallback",
+    "V3": "Cost Intelligence + Learning + Monitoring + Voice",
+    "V4": "Windows/Linux + Multi-device",
+    "V5": "Product/Enterprise Hardening"
+  },
+  "source_blueprint_sha256": "d03318e74618cc854fd9b495896db010596e7dc161b68a406cf4f34bb9974f73"
+}

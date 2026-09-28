@@ -1,0 +1,5 @@
+== API smoke ==
+health_status 200
+health_body {'status': 'ok', 'version': '1.0.0', 'event_chain_valid': True}
+capabilities_status 200
+capability_count 38

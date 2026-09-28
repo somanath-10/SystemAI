@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "ApprovalMode": {
+      "enum": [
+        "never",
+        "policy",
+        "always"
+      ],
+      "title": "ApprovalMode",
+      "type": "string"
+    },
+    "ApprovalPolicy": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ApprovalMode",
+          "default": "policy"
+        },
+        "require_for_critical_risk": {
+          "default": true,
+          "title": "Require For Critical Risk",
+          "type": "boolean"
+        },
+        "require_for_external_side_effects": {
+          "default": true,
+          "title": "Require For External Side Effects",
+          "type": "boolean"
+        },
+        "require_for_high_risk": {
+          "default": true,
+          "title": "Require For High Risk",
+          "type": "boolean"
+        }
+      },
+      "title": "ApprovalPolicy",
+      "type": "object"
+    },
+    "BudgetProfile": {
+      "properties": {
+        "max_audio_seconds": {
+          "default": 0,
+          "title": "Max Audio Seconds",
+          "type": "integer"
+        },
+        "max_cloud_calls": {
+          "default": 0,
+          "title": "Max Cloud Calls",
+          "type": "integer"
+        },
+        "max_cloud_spend_usd": {
+          "default": 0.0,
+          "title": "Max Cloud Spend Usd",
+          "type": "number"
+        },
+        "max_image_calls": {
+          "default": 0,
+          "title": "Max Image Calls",
+          "type": "integer"
+        },
+        "max_premium_calls": {
+          "default": 0,
+          "title": "Max Premium Calls",
+          "type": "integer"
+        },
+        "max_runtime_seconds": {
+          "default": 900,
+          "title": "Max Runtime Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "BudgetProfile",
+      "type": "object"
+    },
+    "ResourceScope": {
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "array"
+        },
+        "recursive": {
+          "default": false,
+          "title": "Recursive",
+          "type": "boolean"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "ResourceScope",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "actor_id": {
+      "default": "local-user",
+      "title": "Actor Id",
+      "type": "string"
+    },
+    "approval_policy": {
+      "$ref": "#/$defs/ApprovalPolicy"
+    },
+    "budget_profile": {
+      "$ref": "#/$defs/BudgetProfile"
+    },
+    "constraints": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Constraints",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "expected_artifacts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Artifacts",
+      "type": "array"
+    },
+    "forbidden_effects": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Forbidden Effects",
+      "type": "array"
+    },
+    "goal_id": {
+      "title": "Goal Id",
+      "type": "string"
+    },
+    "objective": {
+      "title": "Objective",
+      "type": "string"
+    },
+    "priority": {
+      "default": 50,
+      "title": "Priority",
+      "type": "integer"
+    },
+    "privacy_profile": {
+      "default": "local-first",
+      "title": "Privacy Profile",
+      "type": "string"
+    },
+    "resource_scope": {
+      "items": {
+        "$ref": "#/$defs/ResourceScope"
+      },
+      "title": "Resource Scope",
+      "type": "array"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "success_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Success Conditions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "objective"
+  ],
+  "title": "GoalContract",
+  "type": "object"
+}

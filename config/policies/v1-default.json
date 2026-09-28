@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "autonomy_mode": "standard_auto",
+  "rules": {
+    "observe": "allow",
+    "low": "allow_when_scoped",
+    "medium": "allow_when_scoped_and_trusted",
+    "high": "require_approval",
+    "critical": "require_approval_and_isolation"
+  },
+  "hard_denies": [
+    "security.bypass",
+    "credential.extract",
+    "credential.dump",
+    "persistence.stealth",
+    "surveillance.hidden"
+  ],
+  "notes": "Canonical policy is implemented in the Security Kernel; this file documents the V1 default profile and is not an authority by itself."
+}

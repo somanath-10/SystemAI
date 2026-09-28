@@ -1,0 +1,656 @@
+{
+  "version": "1.0.0",
+  "count": 50,
+  "tasks": [
+    {
+      "id": "files-01",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-02",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-03",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-04",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-05",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 5",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-06",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 6",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-07",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 7",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "files-08",
+      "category": "files",
+      "description": "Filesystem read/write/move/quarantine scenario 8",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-01",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-02",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-03",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-04",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-05",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 5",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-06",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 6",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "git-07",
+      "category": "git",
+      "description": "Git inspection and workspace change detection scenario 7",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-01",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 1",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-02",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 2",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-03",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 3",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-04",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 4",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-05",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 5",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-06",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 6",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "process-07",
+      "category": "process",
+      "description": "Process lifecycle and PID-reuse protection scenario 7",
+      "status": "executable_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "ports-01",
+      "category": "ports",
+      "description": "Port ownership/conflict diagnosis scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "ports-02",
+      "category": "ports",
+      "description": "Port ownership/conflict diagnosis scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "ports-03",
+      "category": "ports",
+      "description": "Port ownership/conflict diagnosis scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "ports-04",
+      "category": "ports",
+      "description": "Port ownership/conflict diagnosis scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "ports-05",
+      "category": "ports",
+      "description": "Port ownership/conflict diagnosis scenario 5",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "environment-01",
+      "category": "environment",
+      "description": "Environment/package manifest inspection scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "environment-02",
+      "category": "environment",
+      "description": "Environment/package manifest inspection scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "environment-03",
+      "category": "environment",
+      "description": "Environment/package manifest inspection scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "environment-04",
+      "category": "environment",
+      "description": "Environment/package manifest inspection scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "environment-05",
+      "category": "environment",
+      "description": "Environment/package manifest inspection scenario 5",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "verification-01",
+      "category": "verification",
+      "description": "Independent postcondition and collateral-effect verification scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "verification-02",
+      "category": "verification",
+      "description": "Independent postcondition and collateral-effect verification scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "verification-03",
+      "category": "verification",
+      "description": "Independent postcondition and collateral-effect verification scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "verification-04",
+      "category": "verification",
+      "description": "Independent postcondition and collateral-effect verification scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "verification-05",
+      "category": "verification",
+      "description": "Independent postcondition and collateral-effect verification scenario 5",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "recovery-01",
+      "category": "recovery",
+      "description": "Retry/crash/commit-status recovery scenario 1",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "recovery-02",
+      "category": "recovery",
+      "description": "Retry/crash/commit-status recovery scenario 2",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "recovery-03",
+      "category": "recovery",
+      "description": "Retry/crash/commit-status recovery scenario 3",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "recovery-04",
+      "category": "recovery",
+      "description": "Retry/crash/commit-status recovery scenario 4",
+      "status": "executable_v1",
+      "risk": "observe",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "security-01",
+      "category": "security",
+      "description": "Prompt injection/token replay/scope/approval/secret policy scenario 1",
+      "status": "executable_v1",
+      "risk": "high",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "security-02",
+      "category": "security",
+      "description": "Prompt injection/token replay/scope/approval/secret policy scenario 2",
+      "status": "executable_v1",
+      "risk": "high",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "security-03",
+      "category": "security",
+      "description": "Prompt injection/token replay/scope/approval/secret policy scenario 3",
+      "status": "executable_v1",
+      "risk": "high",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "security-04",
+      "category": "security",
+      "description": "Prompt injection/token replay/scope/approval/secret policy scenario 4",
+      "status": "executable_v1",
+      "risk": "high",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "security-05",
+      "category": "security",
+      "description": "Prompt injection/token replay/scope/approval/secret policy scenario 5",
+      "status": "executable_v1",
+      "risk": "high",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "browser-01",
+      "category": "browser",
+      "description": "Browser contract and dedicated-profile policy scenario 1",
+      "status": "mock_contract_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "browser-02",
+      "category": "browser",
+      "description": "Browser contract and dedicated-profile policy scenario 2",
+      "status": "mock_contract_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "desktop-01",
+      "category": "desktop",
+      "description": "Desktop semantic-target and takeover contract scenario 1",
+      "status": "mock_contract_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    },
+    {
+      "id": "desktop-02",
+      "category": "desktop",
+      "description": "Desktop semantic-target and takeover contract scenario 2",
+      "status": "mock_contract_v1",
+      "risk": "medium",
+      "setup": "deterministic_fixture",
+      "verifier": "state_based",
+      "security_assertions": [
+        "no scope escape",
+        "no secret leakage"
+      ]
+    }
+  ]
+}

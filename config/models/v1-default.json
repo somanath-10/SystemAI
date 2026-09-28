@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "planner": "deterministic-developer-diagnosis-v1",
+  "remote_models_required": false,
+  "future_cost_ladder": [
+    "deterministic",
+    "qualified_skill",
+    "small_local",
+    "local_llm_vlm",
+    "cheap_specialist_api",
+    "premium_frontier_reasoner"
+  ]
+}

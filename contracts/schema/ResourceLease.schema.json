@@ -1,0 +1,45 @@
+{
+  "properties": {
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "fencing_token": {
+      "default": 0,
+      "title": "Fencing Token",
+      "type": "integer"
+    },
+    "holder_node_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Holder Node Id"
+    },
+    "holder_task_id": {
+      "title": "Holder Task Id",
+      "type": "string"
+    },
+    "lease_id": {
+      "title": "Lease Id",
+      "type": "string"
+    },
+    "resource": {
+      "title": "Resource",
+      "type": "string"
+    }
+  },
+  "required": [
+    "resource",
+    "holder_task_id",
+    "expires_at"
+  ],
+  "title": "ResourceLease",
+  "type": "object"
+}

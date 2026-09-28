@@ -1,0 +1,38 @@
+SystemAI/
+|-- apps/
+|   `-- desktop/
+|       |-- src-tauri/                 # Tauri shell
+|       `-- ui/                        # React/Vite Command Center
+|-- build/reports/                     # recorded build outputs
+|-- config/                            # V1 model and policy defaults
+|-- contracts/schema/                  # generated cross-language schemas
+|-- docs/                              # architecture, guides, security, roadmap
+|-- evals/systemai/catalog.json        # 50-case evaluation catalog
+|-- examples/
+|-- native/
+|   |-- privileged-helper/             # later elevated-helper contract
+|   `-- security-kernel/               # Rust production-target kernel
+|-- sandbox/profiles/
+|-- scripts/                           # doctor, schema, and V1 acceptance helpers
+|-- src/systemai/
+|   |-- api/                           # V1 local HTTP control plane
+|   |-- contracts/                     # Pydantic contracts
+|   |-- core/                          # DAG, capabilities, legacy runtime
+|   |-- diagnostics/                   # inspector, diagnosis planner inputs, port probe
+|   |-- execution/                     # authorized filesystem/process/http/sandbox adapters
+|   |-- memory/                        # legacy memory/audit support
+|   |-- monitoring/
+|   |-- orchestration/                 # event store, journal, leases, V1 runtime
+|   |-- planner/                       # deterministic V1 developer planner
+|   |-- recovery/
+|   |-- security/                      # canonical policy, approvals, signed capabilities
+|   |-- verification/                  # independent postcondition verification
+|   `-- v1.py                          # V1 composition root
+|-- storage/
+|-- tests/                             # V0.2 regressions plus V1 unit/integration/security tests
+|-- BUILD_REPORT_V1.md
+|-- FILE_INDEX.txt                     # exhaustive source index
+|-- PROJECT_MANIFEST.json
+|-- README.md
+|-- pyproject.toml
+`-- requirements-v1.lock.txt

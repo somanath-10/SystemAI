@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "Sensitivity": {
+      "enum": [
+        "public",
+        "internal",
+        "sensitive",
+        "secret"
+      ],
+      "title": "Sensitivity",
+      "type": "string"
+    },
+    "SourceProvenance": {
+      "properties": {
+        "derived_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Derived From",
+          "type": "array"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/Sensitivity",
+          "default": "internal"
+        },
+        "source_resource": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Resource"
+        },
+        "source_type": {
+          "default": "user",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "transformation_history": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Transformation History",
+          "type": "array"
+        },
+        "trust_class": {
+          "$ref": "#/$defs/TrustLevel",
+          "default": "trusted"
+        }
+      },
+      "title": "SourceProvenance",
+      "type": "object"
+    },
+    "TrustLevel": {
+      "enum": [
+        "trusted",
+        "untrusted",
+        "mixed"
+      ],
+      "title": "TrustLevel",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "artifact_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Reference"
+    },
+    "content_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Hash"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "freshness": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Freshness"
+    },
+    "generation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generation"
+    },
+    "observation_id": {
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/SourceProvenance"
+    },
+    "redactions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Redactions",
+      "type": "array"
+    },
+    "sensitivity": {
+      "$ref": "#/$defs/Sensitivity",
+      "default": "internal"
+    },
+    "source_resource": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Resource"
+    },
+    "source_type": {
+      "title": "Source Type",
+      "type": "string"
+    },
+    "structured_data": {
+      "additionalProperties": true,
+      "title": "Structured Data",
+      "type": "object"
+    },
+    "trust_class": {
+      "$ref": "#/$defs/TrustLevel",
+      "default": "untrusted"
+    }
+  },
+  "required": [
+    "source_type"
+  ],
+  "title": "Observation",
+  "type": "object"
+}

@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "ActionStatus": {
+      "enum": [
+        "proposed",
+        "allowed",
+        "denied",
+        "waiting_for_approval",
+        "running",
+        "completed",
+        "failed",
+        "rejected"
+      ],
+      "title": "ActionStatus",
+      "type": "string"
+    },
+    "EffectStatus": {
+      "enum": [
+        "confirmed",
+        "unverifiable",
+        "suspected_noop",
+        "failed"
+      ],
+      "title": "EffectStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "action_id": {
+      "title": "Action Id",
+      "type": "string"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "effect": {
+      "$ref": "#/$defs/EffectStatus",
+      "default": "unverifiable"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "executor": {
+      "title": "Executor",
+      "type": "string"
+    },
+    "fallback_used": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fallback Used"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "output": {
+      "additionalProperties": true,
+      "title": "Output",
+      "type": "object"
+    },
+    "side_effects": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Side Effects",
+      "type": "array"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ActionStatus"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "action_id",
+    "status",
+    "executor"
+  ],
+  "title": "ActionResult",
+  "type": "object"
+}
