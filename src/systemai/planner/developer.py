@@ -5,19 +5,19 @@ from uuid import uuid4
 
 from systemai.contracts.models import GoalContract, ResourceScope
 from systemai.core.task_graph import TaskGraph, TaskNode
-from systemai.diagnostics import DeveloperDiagnosisEngineV1
+from systemai.diagnostics import DeveloperDiagnosisEngine
 
 
-class DeveloperDiagnosisPlannerV1:
-    """Single-planner V1 implementation for the developer diagnosis wedge.
+class DeveloperDiagnosisPlanner:
+    """Single-planner implementation for the developer diagnosis wedge.
 
     It combines deterministic project inspection/diagnosis with typed remediation
     actions. A cloud/frontier planner can replace or augment this implementation
     behind the same TaskGraph contract later.
     """
 
-    def __init__(self, diagnosis: DeveloperDiagnosisEngineV1 | None = None) -> None:
-        self.diagnosis = diagnosis or DeveloperDiagnosisEngineV1()
+    def __init__(self, diagnosis: DeveloperDiagnosisEngine | None = None) -> None:
+        self.diagnosis = diagnosis or DeveloperDiagnosisEngine()
 
     def goal_contract(self, goal: str, project_root: Path, *, actor_id: str = "local-user") -> GoalContract:
         root = project_root.expanduser().resolve(strict=True)

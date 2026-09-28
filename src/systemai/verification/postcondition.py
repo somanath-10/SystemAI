@@ -40,8 +40,8 @@ def _file_in_scope(path: Path, action: ActionIntent) -> bool:
     return bool(action.target and action.target.path and candidate == Path(action.target.path).expanduser().resolve(strict=False))
 
 
-class VerifierV1:
-    """Independent postcondition verifier for V1 capabilities."""
+class PostconditionVerifier:
+    """Independent postcondition verifier for capabilities."""
 
     async def verify(self, action: ActionIntent, result: ActionResult) -> VerificationResult:
         checks: list[dict] = []

@@ -1959,7 +1959,7 @@ Examples from the reviewed ecosystem:
 - UFO: permissive MIT reference.
 - Cua: permissive MIT reference/dependency.
 - Agent-S: Apache-2.0 reference.
-- agent-ctrl: Apache-style/permissive reference; verify current release before bundling.
+- agent-ctrl: Apache-style/permissive reference; verify the package version before bundling.
 - Agent Desktop/Open Computer Use/Browser Harness/Stagehand: verify exact package/release license during integration.
 - Skyvern: AGPL concerns for copied/linked deployment; keep as architecture reference or isolated service unless licensing is intentionally accepted.
 - OmniParser: code/model weights may have different terms; review each asset.
@@ -2003,7 +2003,7 @@ Only inside disposable VM/test environments; never the consumer default.
 
 SystemAI should not be called complete merely when it can click applications.
 
-V1 completion gate:
+first release completion gate:
 
 - real macOS daily-use workflows stable,
 - Windows and Linux basic execution validated,

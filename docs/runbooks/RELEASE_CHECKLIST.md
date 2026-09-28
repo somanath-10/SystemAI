@@ -1,12 +1,12 @@
-# V1 Release Checklist
+# first release Release Checklist
 
 - [ ] Python compileall passes.
 - [ ] Pytest suite passes.
-- [ ] V1 end-to-end port-conflict repair passes.
+- [ ] first release end-to-end port-conflict repair passes.
 - [ ] Event hash chain passes.
 - [ ] Token replay test passes.
 - [ ] Scope/canonical-risk tests pass.
-- [ ] Evaluation catalog contains 40-60 fixed cases (V1: 50).
+- [ ] Evaluation catalog contains 40-60 fixed cases (first release: 50).
 - [ ] No caches/runtime DB/private keys in ZIP.
 - [ ] Master blueprint included.
 - [ ] README/version/changelog consistent.

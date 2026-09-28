@@ -1,6 +1,6 @@
-# V1 Data Model
+# first release Data Model
 
-SystemAI V1 uses SQLite with WAL mode.
+SystemAI first release uses SQLite with WAL mode.
 
 ## Durable tables
 
@@ -46,7 +46,7 @@ Durable replay protection.
 
 ### `model_calls`
 
-Reserved V1 schema for measured model/provider usage. Cost routing is a later release.
+Reserved first release schema for measured model/provider usage. Cost routing is a later release.
 
 ### `artifacts`
 
@@ -63,10 +63,10 @@ Projection rebuild/checkpoint state.
 - easy backups and deterministic test fixtures;
 - no operational dependency;
 - fast development;
-- enough for a single-machine V1.
+- enough for a single-machine first release.
 
 Only move to PostgreSQL/event brokers/graph DBs when measured concurrency/scale requires it.
 
 ## Secret data
 
-Secret values must not be stored as normal SQLite records. The future Secret Broker uses platform secure storage. V1 environment inspection stores only key names/missing-key facts.
+Secret values must not be stored as normal SQLite records. The future Secret Broker uses platform secure storage. first release environment inspection stores only key names/missing-key facts.

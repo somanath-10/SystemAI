@@ -2,10 +2,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from systemai.api.v1_server import create_app
+from systemai.api.local_server import create_app
 
 
-def test_v1_health_and_capabilities(tmp_path: Path) -> None:
+def test_health_and_capabilities(tmp_path: Path) -> None:
     client = TestClient(create_app(tmp_path / "data"))
     health = client.get("/health")
     assert health.status_code == 200
@@ -17,7 +17,7 @@ def test_v1_health_and_capabilities(tmp_path: Path) -> None:
     assert len(capabilities.json()["items"]) >= 30
 
 
-def test_v1_api_allows_local_ui_preflight(tmp_path: Path) -> None:
+def test_api_allows_local_ui_preflight(tmp_path: Path) -> None:
     client = TestClient(create_app(tmp_path / "data"))
     response = client.options(
         "/tasks/developer-diagnosis",

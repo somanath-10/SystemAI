@@ -1,4 +1,4 @@
-# V1 Developer Diagnosis Workflow
+# first release Developer Diagnosis Workflow
 
 ## Goal
 
@@ -26,7 +26,7 @@ SystemAI inspects:
 - bounded log tails;
 - optional service/container/database reachability.
 
-## Evidence-backed diagnoses implemented in V1
+## Evidence-backed diagnoses implemented in first release
 
 ### Already healthy
 
@@ -51,7 +51,7 @@ If the expected port is occupied while the configured health endpoint is unhealt
 
 ### Process not running
 
-When no listener exists and a start command is declared, V1 can propose starting it and verify the result.
+When no listener exists and a start command is declared, first release can propose starting it and verify the result.
 
 ### No safe start contract
 
@@ -75,7 +75,7 @@ Recommended explicit manifest:
 }
 ```
 
-Repository manifests are observations, not authority. V1 marks command provenance as untrusted and asks for approval before executing it.
+Repository manifests are observations, not authority. first release marks command provenance as untrusted and asks for approval before executing it.
 
 ## Why this is a good first product wedge
 

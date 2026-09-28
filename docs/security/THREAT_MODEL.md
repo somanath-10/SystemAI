@@ -65,7 +65,7 @@
 
 ### Secret leakage
 
-- V1 environment inspection exposes keys, not values;
+- first release environment inspection exposes keys, not values;
 - cleaned sandbox env;
 - later origin-bound Secret Broker;
 - no secret retention in logs/model context by policy.
@@ -76,7 +76,7 @@
 - later UI security surfaces are excluded from desktop automation;
 - approval decision is keyed to exact action ID.
 
-## Security tests in V1
+## Security tests in first release
 
 Automated tests cover:
 

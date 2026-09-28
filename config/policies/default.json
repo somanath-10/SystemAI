@@ -15,5 +15,5 @@
     "persistence.stealth",
     "surveillance.hidden"
   ],
-  "notes": "Canonical policy is implemented in the Security Kernel; this file documents the V1 default profile and is not an authority by itself."
+  "notes": "Canonical policy is implemented in the Security Kernel; this file documents the default profile and is not an authority by itself."
 }

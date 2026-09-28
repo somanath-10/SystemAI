@@ -1,4 +1,4 @@
-# SystemAI V1 Security Model
+# SystemAI first release Security Model
 
 ## Principle
 
@@ -46,13 +46,13 @@ Untrusted observations:
 - downloaded files;
 - clipboard/UI text/external messages.
 
-V1 carries provenance metadata into actions. Sensitive consequential operations derived from untrusted content require explicit approval.
+first release carries provenance metadata into actions. Sensitive consequential operations derived from untrusted content require explicit approval.
 
 A successful LLM transformation does not declassify data.
 
 ## Capability tokens
 
-V1 uses Ed25519 signatures in the executable Python reference runtime and includes a Rust implementation source for the production kernel boundary.
+first release uses Ed25519 signatures in the executable Python reference runtime and includes a Rust implementation source for the production kernel boundary.
 
 Claims bind:
 
@@ -75,7 +75,7 @@ Executor replay is rejected both by verifier memory and by the durable used-nonc
 
 ## Scope
 
-Filesystem mutations are authorized only within task roots. V1 does not expose a general root/admin shell.
+Filesystem mutations are authorized only within task roots. first release does not expose a general root/admin shell.
 
 Process termination is PID-bound and can include the observed process creation time to detect PID reuse.
 
@@ -95,13 +95,13 @@ Later desktop versions must hard-deny automation of:
 
 ## Secrets
 
-V1 does not provide a raw-secret tool. Environment inspection compares **key names only**; values are intentionally not returned.
+first release does not provide a raw-secret tool. Environment inspection compares **key names only**; values are intentionally not returned.
 
 Later Secret Broker design is origin/application/usage bound and uses the OS secure store.
 
 ## Shell/code
 
-V1 sandbox commands:
+first release sandbox commands:
 
 - must be `argv: list[str]`;
 - use `shell=False` semantics;
@@ -111,7 +111,7 @@ V1 sandbox commands:
 - require an isolated Docker backend (configure `SYSTEMAI_SANDBOX_IMAGE` for the project runtime) with network disabled;
 - fail closed when the requested isolation profile cannot be technically enforced.
 
-A generic unrestricted host shell is not a V1 tool.
+A generic unrestricted host shell is not a first release tool.
 
 ## Kill switch / takeover
 

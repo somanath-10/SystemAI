@@ -18,7 +18,7 @@ def _canonical(value: Any) -> str:
 
 
 class EventStore:
-    """SQLite/WAL append-only source of truth for V1 runtime events.
+    """SQLite/WAL append-only source of truth for runtime events.
 
     The store also contains compact projections/action-journal tables. Events are
     hash chained so accidental or unauthorized historical edits are detectable.

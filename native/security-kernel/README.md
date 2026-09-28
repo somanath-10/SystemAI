@@ -1,6 +1,6 @@
 # Rust Security Kernel
 
-This crate is the production-target authority boundary for SystemAI. The V1 Python runtime includes a strict reference kernel with the same intended decisions so the end-to-end release can be tested in environments that do not contain Rust.
+This crate is the production-target authority boundary for SystemAI. The first release Python runtime includes a strict reference kernel with the same intended decisions so the end-to-end release can be tested in environments that do not contain Rust.
 
 Responsibilities:
 

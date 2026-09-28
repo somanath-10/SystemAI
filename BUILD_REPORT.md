@@ -1,4 +1,4 @@
-# SystemAI V1 Build and Verification Report
+# SystemAI Build and Verification Report
 
 **Product version:** 1.0.0  
 **Release scope:** Trusted Core + Developer Diagnosis  
@@ -6,7 +6,7 @@
 
 ## What was built
 
-V1 implements an end-to-end local developer-diagnosis/repair vertical slice with:
+SystemAI implements an end-to-end local developer-diagnosis/repair vertical slice with:
 
 - GoalContract and versioned typed contracts;
 - validated task DAG;
@@ -31,7 +31,7 @@ V1 implements an end-to-end local developer-diagnosis/repair vertical slice with
 ### Python
 
 - `make compile`: **PASS**
-- `make test`: **35 / 35 PASS**
+- `make test`: **43 / 43 PASS**
 - full package import smoke: **78 modules imported, 0 failures**
 - editable package install using setuptools: **PASS**
 - `systemai version`: **1.0.0**
@@ -39,7 +39,7 @@ V1 implements an end-to-end local developer-diagnosis/repair vertical slice with
 
 ### End-to-end acceptance
 
-`scripts/run_v1_acceptance.py`: **PASS**
+`scripts/run_acceptance.py`: **PASS**
 
 The fixture creates a temporary project, intentionally occupies its expected port, runs SystemAI diagnosis, requires canonical approval to terminate the exact conflicting process, requires canonical approval to start the untrusted project-declared command, launches the intended app, calls its health endpoint, verifies HTTP 200, and verifies the event/audit chain.
 
@@ -64,7 +64,7 @@ FastAPI TestClient smoke:
 
 ### Rust Security Kernel
 
-The Rust crate source is included under `native/security-kernel/`, but this build environment does not contain `rustc`/`cargo`. Therefore the Rust crate was **not compiled or test-executed here**. The runnable V1 acceptance uses the strict Python reference kernel. Production integration must compile/test the Rust kernel on a Rust-enabled host before release authority is moved out of process.
+The Rust crate source is included under `native/security-kernel/`, but this build environment does not contain `rustc`/`cargo`. Therefore the Rust crate was **not compiled or test-executed here**. The runnable acceptance uses the strict Python reference kernel. Production integration must compile/test the Rust kernel on a Rust-enabled host before release authority is moved out of process.
 
 ## Security checks included in automated tests
 
@@ -83,14 +83,14 @@ The Rust crate source is included under `native/security-kernel/`, but this buil
 ## Source audit performed before packaging
 
 - imported every Python package module: no import failures;
-- scanned for `shell=True` / `os.system`: none in V1 runtime;
+- scanned for `shell=True` / `os.system`: none in runtime;
 - JSON contract/config/evaluation files parsed successfully;
 - generated contract JSON Schemas successfully;
 - updated master blueprint copy hash matches the supplied source exactly.
 
-## Honest V1 boundaries
+## Honest boundaries
 
-This ZIP is complete for the **declared V1 release scope**, not the full multi-version SystemAI vision. Specifically not production-complete in V1:
+This package is complete for the declared release scope, not the full multi-version SystemAI vision. It is not yet production-complete for:
 
 - Rust kernel process integration over secure IPC;
 - real macOS Cua desktop operation under the V3 trust model;

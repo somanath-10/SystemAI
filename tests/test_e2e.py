@@ -11,7 +11,7 @@ import httpx
 import psutil
 import pytest
 
-from systemai.v1 import build_v1_runtime
+from systemai.runtime import build_runtime
 from systemai.diagnostics.ports import port_is_listening
 
 
@@ -68,7 +68,7 @@ HTTPServer(('127.0.0.1', {port}), H).serve_forever()
     target_pid = None
     try:
         wait_port(port)
-        runtime = build_v1_runtime(data_dir=tmp_path / "systemai-data", autonomy_mode="standard_auto")
+        runtime = build_runtime(data_dir=tmp_path / "systemai-data", autonomy_mode="standard_auto")
         session = await runtime.create_developer_task("Find why this project is not running and fix it.", project)
         assert session.state.value == "waiting_for_approval"
 

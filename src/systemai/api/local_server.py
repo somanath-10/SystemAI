@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from systemai.v1 import VERSION, build_v1_runtime
+from systemai.runtime import VERSION, build_runtime
 
 
 class DiagnoseRequest(BaseModel):
@@ -24,7 +24,7 @@ class ApprovalBody(BaseModel):
 
 
 def create_app(data_dir: Path | None = None) -> FastAPI:
-    app = FastAPI(title="SystemAI V1 Local Control API", version=VERSION)
+    app = FastAPI(title="SystemAI Local Control API", version=VERSION)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "tauri://localhost"],
@@ -32,8 +32,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
-    data_dir = data_dir or Path(os.environ.get("SYSTEMAI_DATA_DIR", str(Path.home() / ".systemai" / "v1")))
-    runtime = build_v1_runtime(data_dir=data_dir)
+    data_dir = data_dir or Path(os.environ.get("SYSTEMAI_DATA_DIR", str(Path.home() / ".systemai" / "runtime")))
+    runtime = build_runtime(data_dir=data_dir)
     app.state.runtime = runtime
 
     @app.get("/health")

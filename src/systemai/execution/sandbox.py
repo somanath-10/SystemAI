@@ -48,8 +48,8 @@ async def _read_limited(stream: asyncio.StreamReader, limit: int) -> tuple[bytes
     return bytes(output), truncated
 
 
-class SandboxExecutorV1(AuthorizedExecutor):
-    """V1 bounded command worker.
+class SandboxExecutor(AuthorizedExecutor):
+    """Bounded command worker.
 
     It fails closed whenever an isolated Docker backend is unavailable.
     It never accepts a
@@ -75,12 +75,12 @@ class SandboxExecutorV1(AuthorizedExecutor):
                 raise ValueError("shell metacharacters are not accepted; provide argv tokens")
             binary = Path(argv[0]).name
             if binary not in self.allowed_binaries:
-                raise PermissionError(f"binary not allowlisted for V1 sandbox: {binary}")
+                raise PermissionError(f"binary not allowlisted for sandbox: {binary}")
             cwd = Path(str(action.parameters.get("cwd") or (action.target.path if action.target else "."))).expanduser().resolve(strict=True)
             profile = SandboxProfile(str(action.parameters.get("profile", SandboxProfile.READ_ONLY.value)))
             backend = self._backend_for(profile)
             if profile in {SandboxProfile.WORKSPACE_WRITE_ALLOWLIST_NETWORK, SandboxProfile.APPROVED_ELEVATED_HOST_OPERATION}:
-                raise RuntimeError(f"V1 cannot enforce sandbox profile '{profile.value}'")
+                raise RuntimeError(f"cannot enforce sandbox profile '{profile.value}'")
             if backend == "none":
                 raise RuntimeError(f"requested sandbox profile '{profile.value}' cannot be enforced on this host; fail closed")
             timeout = _bounded_float(action.parameters.get("timeout"), default=120, maximum=MAX_TIMEOUT_SECONDS, name="timeout")

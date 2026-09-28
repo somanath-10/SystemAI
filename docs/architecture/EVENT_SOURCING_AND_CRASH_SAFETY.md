@@ -1,10 +1,10 @@
 # Event Sourcing and Crash Safety
 
-## Why V1 uses an append-only event log
+## Why first release uses an append-only event log
 
 SystemAI has many possible projections: task state, world state, approvals, audit, skill candidates, cost and application state. If each becomes an independent truth store, they will eventually disagree.
 
-V1 therefore makes the durable event log the primary execution history and keeps compact projections for fast access.
+first release therefore makes the durable event log the primary execution history and keeps compact projections for fast access.
 
 ## Event integrity
 
@@ -44,7 +44,7 @@ VERIFIED
 
 Capabilities declare whether they are idempotent/retry-safe and whether the external system supports idempotency keys.
 
-V1 only automatically retries capabilities explicitly marked retry-safe.
+first release only automatically retries capabilities explicitly marked retry-safe.
 
 ## Reversibility
 

@@ -27,7 +27,7 @@ Treat as an integrity incident. Stop consequential automation, preserve DB/WAL c
 
 ## Signing-key exposure
 
-V1 development key lives under the configured data directory. If exposed:
+first release development key lives under the configured data directory. If exposed:
 
 - stop executors;
 - rotate the key;

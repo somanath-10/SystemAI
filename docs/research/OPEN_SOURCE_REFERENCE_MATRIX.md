@@ -4,7 +4,7 @@ This document records how the projects discussed during SystemAI design influenc
 
 | Project / ecosystem | Adopt | Reject / constrain |
 |---|---|---|
-| Microsoft UFO / UFO2 / UFO3 Galaxy | explicit stages, task DAG/constellation, state-machine ideas, future device capability assignment | do not make UFO the V1 framework; do not introduce an early agent swarm |
+| Microsoft UFO / UFO2 / UFO3 Galaxy | explicit stages, task DAG/constellation, state-machine ideas, future device capability assignment | do not make UFO the first release framework; do not introduce an early agent swarm |
 | Cua | initial ComputerExecutor backend, native-driver separation, stable macOS TCC identity, bounded manifests, exact app/window targets, doctor/readiness | Cua is not the global SystemAI security kernel |
 | Agent-S | separate reasoning/grounding, visual reflection, bounded screenshot history, local grounding research | no arbitrary model-generated Python/Bash `eval`/`exec` on host |
 | Open Interpreter / Codex-style runtime | sandbox policy separated from approval policy, read-only/workspace-write/elevated modes, provider profiles, fail closed | do not use generic shell as privileged desktop authority |
@@ -30,7 +30,7 @@ This document records how the projects discussed during SystemAI design influenc
 
 ## Architectural synthesis
 
-The V1 synthesis is:
+The first release synthesis is:
 
 ```text
 UFO/Galaxy        -> DAG concepts

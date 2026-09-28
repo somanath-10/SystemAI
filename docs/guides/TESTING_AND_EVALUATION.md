@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-Evaluation is a development primitive, not a release afterthought. V1 includes deterministic state-based tests before expansion to broad desktop/browser AI tasks.
+Evaluation is a development primitive, not a release afterthought. first release includes deterministic state-based tests before expansion to broad desktop/browser AI tasks.
 
 ## Automated tests
 
@@ -47,7 +47,7 @@ Categories:
 - browser contract;
 - desktop contract.
 
-The browser/desktop cases are contract/mock cases in V1 and become real integration cases in V2.
+The browser/desktop cases are contract/mock cases in first release and become real integration cases in V2.
 
 ## Metrics
 

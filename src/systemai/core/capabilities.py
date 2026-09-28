@@ -41,7 +41,7 @@ def default_capabilities() -> CapabilityRegistry:
         c("file.read", "Read a local file", RiskLevel.OBSERVE, "filesystem", reversible=True, idempotent=True, retry_safe=True, supported_verifiers=["file.exists", "file.hash"]),
         c("file.write", "Create or update a local file with backup", RiskLevel.MEDIUM, "filesystem", reversible=True, compensation_strategy="restore_backup", supported_verifiers=["file.exists", "file.hash"]),
         c("file.move", "Move/rename a local file", RiskLevel.MEDIUM, "filesystem", reversible=True, compensation_strategy="move_back", supported_verifiers=["file.moved", "file.hash"]),
-        c("file.delete", "Move a file to quarantine/trash; permanent delete is not a normal V1 path", RiskLevel.HIGH, "filesystem", reversible=True, compensation_strategy="restore_from_quarantine", dangerous=True, supported_verifiers=["file.absent"]),
+        c("file.delete", "Move a file to quarantine/trash; permanent delete is not a normal path", RiskLevel.HIGH, "filesystem", reversible=True, compensation_strategy="restore_from_quarantine", dangerous=True, supported_verifiers=["file.absent"]),
         c("directory.list", "List a directory", RiskLevel.OBSERVE, "filesystem", reversible=True, idempotent=True, retry_safe=True),
         c("directory.create", "Create a directory", RiskLevel.LOW, "filesystem", reversible=True, retry_safe=True, compensation_strategy="remove_if_empty"),
         c("git.inspect", "Inspect Git branch/status/diff/log", RiskLevel.OBSERVE, "diagnostic", reversible=True, idempotent=True, retry_safe=True),
@@ -58,9 +58,9 @@ def default_capabilities() -> CapabilityRegistry:
         c("service.inspect", "Inspect service status when available", RiskLevel.OBSERVE, "diagnostic", reversible=True, idempotent=True, retry_safe=True),
         c("container.inspect", "Inspect local container runtime and declared containers", RiskLevel.OBSERVE, "diagnostic", reversible=True, idempotent=True, retry_safe=True),
         c("database.inspect", "Run read-only database health inspection through a declared adapter", RiskLevel.OBSERVE, "diagnostic", reversible=True, idempotent=True, retry_safe=True),
-        c("sandbox.run", "Run an argv command in the configured V1 sandbox profile", RiskLevel.MEDIUM, "sandbox", reversible=False, supported_verifiers=["command.exit_code"]),
+        c("sandbox.run", "Run an argv command in the configured sandbox profile", RiskLevel.MEDIUM, "sandbox", reversible=False, supported_verifiers=["command.exit_code"]),
         c("test.run", "Run a declared project test command in the sandbox", RiskLevel.MEDIUM, "sandbox", reversible=False, supported_verifiers=["command.exit_code"]),
-        # Desktop/browser capabilities stay registered for forward-compatible contracts but are not V1 release blockers.
+        # Desktop/browser capabilities stay registered for forward-compatible contracts but are not release blockers.
         c("application.list", "List desktop applications visible to an authorized driver", RiskLevel.OBSERVE, "computer", reversible=True, idempotent=True, retry_safe=True),
         c("application.launch", "Launch an installed application", RiskLevel.LOW, "computer", reversible=True),
         c("window.list", "List windows for an application/process", RiskLevel.OBSERVE, "computer", reversible=True, idempotent=True, retry_safe=True),

@@ -22,9 +22,9 @@ from systemai.execution.base import ExecutionGateway
 from systemai.orchestration.action_journal import ActionJournal
 from systemai.orchestration.event_store import EventStore
 from systemai.orchestration.leases import ResourceBusy, ResourceLeaseManager
-from systemai.planner.developer_v1 import DeveloperDiagnosisPlannerV1
-from systemai.security.kernel import SecurityContext, SecurityKernelV1
-from systemai.verification.v1_verifier import VerifierV1
+from systemai.planner.developer import DeveloperDiagnosisPlanner
+from systemai.security.kernel import SecurityContext, SecurityKernel
+from systemai.verification.postcondition import PostconditionVerifier
 
 
 def _token_nonce(token: str | None) -> str | None:
@@ -39,7 +39,7 @@ def _token_nonce(token: str | None) -> str | None:
 
 
 @dataclass(slots=True)
-class V1TaskSession:
+class TaskSession:
     task_id: str
     contract: GoalContract
     project_root: Path
@@ -82,10 +82,10 @@ class V1TaskSession:
         }
 
 
-class SystemAIV1Runtime:
-    """V1 event-sourced developer diagnosis runtime.
+class SystemAIRuntime:
+    """Event-sourced developer diagnosis runtime.
 
-    V1 is deliberately one-planner + specialized deterministic tools. Every
+    SystemAI deliberately uses one planner plus specialized deterministic tools. Every
     consequential action passes through canonical policy, a signed capability,
     crash-safe journal, resource leases, a trusted executor, and an independent
     verifier.
@@ -94,10 +94,10 @@ class SystemAIV1Runtime:
     def __init__(
         self,
         *,
-        planner: DeveloperDiagnosisPlannerV1,
-        security_kernel: SecurityKernelV1,
+        planner: DeveloperDiagnosisPlanner,
+        security_kernel: SecurityKernel,
         gateway: ExecutionGateway,
-        verifier: VerifierV1,
+        verifier: PostconditionVerifier,
         store: EventStore,
         journal: ActionJournal,
         leases: ResourceLeaseManager,
@@ -111,7 +111,7 @@ class SystemAIV1Runtime:
         self.journal = journal
         self.leases = leases
         self.autonomy_mode = autonomy_mode
-        self.sessions: dict[str, V1TaskSession] = {}
+        self.sessions: dict[str, TaskSession] = {}
 
     async def create_developer_task(
         self,
@@ -120,7 +120,7 @@ class SystemAIV1Runtime:
         *,
         actor_id: str = "local-user",
         autonomy_mode: str | None = None,
-    ) -> V1TaskSession:
+    ) -> TaskSession:
         project_root = Path(project_root).expanduser().resolve(strict=True)
         autonomy_mode = autonomy_mode or self.autonomy_mode
         if autonomy_mode not in {"observe", "assist", "standard_auto"}:
@@ -132,7 +132,7 @@ class SystemAIV1Runtime:
         diagnosis = report.model_dump(mode="json")
         self.store.append("ObservationReceived", {"kind": "developer_diagnosis", "summary": report.summary, "facts": self._redacted_facts(diagnosis.get("facts", {}))}, task_id=task_id)
         self.store.append("PlanCreated", {"nodes": graph.topological_order() if graph.nodes else [], "diagnosis": report.summary}, task_id=task_id)
-        session = V1TaskSession(
+        session = TaskSession(
             task_id=task_id,
             contract=contract,
             project_root=project_root,
@@ -155,7 +155,7 @@ class SystemAIV1Runtime:
         await self.run(task_id)
         return session
 
-    async def run(self, task_id: str) -> V1TaskSession:
+    async def run(self, task_id: str) -> TaskSession:
         session = self.sessions[task_id]
         async with session.lock:
             if session.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED, TaskState.PAUSED, TaskState.USER_TAKEOVER}:
@@ -186,7 +186,7 @@ class SystemAIV1Runtime:
                             candidate.state = StepState.SKIPPED
                     continue
 
-    async def _run_node(self, session: V1TaskSession, node: TaskNode) -> str:
+    async def _run_node(self, session: TaskSession, node: TaskNode) -> str:
         action = node.action
         leases = []
         try:
@@ -273,7 +273,7 @@ class SystemAIV1Runtime:
         finally:
             self.leases.release_many(leases)
 
-    async def _maybe_retry(self, session: V1TaskSession, node: TaskNode, error: str) -> str:
+    async def _maybe_retry(self, session: TaskSession, node: TaskNode, error: str) -> str:
         node.last_error = error
         if node.attempts < node.max_attempts and self.security_kernel.registry.get(node.action.capability).retry_safe:
             node.state = StepState.PENDING
@@ -323,7 +323,7 @@ class SystemAIV1Runtime:
         self.store.append("TaskCancelled", {}, task_id=task_id)
         self._persist(session)
 
-    async def resume(self, task_id: str) -> V1TaskSession:
+    async def resume(self, task_id: str) -> TaskSession:
         session = self.sessions[task_id]
         if session.state not in {TaskState.PAUSED, TaskState.WAITING_FOR_RESOURCE}:
             raise ValueError("task is not paused or waiting for a resource")
@@ -367,7 +367,7 @@ class SystemAIV1Runtime:
                     for step in snapshot["steps"]
                 ]
                 graph = TaskGraph.from_nodes(record["task_id"], nodes)
-                session = V1TaskSession(
+                session = TaskSession(
                     task_id=record["task_id"],
                     contract=GoalContract.model_validate(snapshot["goal"]),
                     project_root=Path(snapshot["project_root"]),
@@ -428,14 +428,14 @@ class SystemAIV1Runtime:
                 self.store.append("CommitStatusUnknown", {"previous_status": item["status"]}, task_id=item["task_id"], node_id=item["node_id"], action_id=item["action_id"])
         return self.journal.unresolved()
 
-    def _persist(self, session: V1TaskSession) -> None:
+    def _persist(self, session: TaskSession) -> None:
         snapshot = session.snapshot()
         self.store.upsert_task(session.task_id, session.contract.goal_id, session.contract.objective, session.state.value, snapshot)
         for node in session.graph.nodes.values():
             self.store.upsert_node(session.task_id, node.node_id, node.state.value, {"title": node.title, "action": node.action.model_dump(mode="json"), "dependencies": sorted(node.dependencies), "resources": sorted(node.resource_requirements), "attempts": node.attempts, "last_error": node.last_error})
         self.store.replace_edges(session.task_id, session.graph.edges())
 
-    def _has_undecided_approvals(self, session: V1TaskSession) -> bool:
+    def _has_undecided_approvals(self, session: TaskSession) -> bool:
         return any(
             not (record := self.security_kernel.approvals.get(approval_id)) or record["approved"] is None
             for approval_id in session.pending_approvals.values()

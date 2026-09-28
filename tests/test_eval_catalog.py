@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-def test_v1_eval_catalog_has_50_fixed_cases():
+def test_eval_catalog_has_50_fixed_cases():
     p = Path(__file__).parents[1] / "evals" / "systemai" / "catalog.json"
     data = json.loads(p.read_text())
     assert data["count"] == 50

@@ -44,12 +44,12 @@ class SecurityContext:
     autonomy_mode: str = "assist"
 
 
-class SecurityKernelV1:
+class SecurityKernel:
     """Python reference/dev implementation of the V3 trusted kernel contract.
 
     The production repository also contains a Rust crate skeleton that owns this
     boundary in deployment. This Python implementation is intentionally strict so
-    all V1 integration/evaluation tests can run in environments without Rust.
+    all integration/evaluation tests can run in environments without Rust.
     """
 
     HARD_DENY_PREFIXES = (
@@ -125,7 +125,7 @@ class SecurityKernelV1:
             reason="Action is registered, scoped, policy-compliant, and authorized.",
             risk=canonical_risk,
             canonical_reversible=canonical_reversible,
-            policy_ids=["v1-canonical-policy"],
+            policy_ids=["canonical-policy"],
             capability_token_required=True,
             required_isolation=self._required_isolation(action),
             allowed_scope=allowed_scope,

@@ -5,15 +5,15 @@ import pytest
 from systemai.contracts.models import ActionIntent, ActionResult, ActionTarget, ResourceScope, RiskLevel, SourceProvenance, TrustLevel, VerificationSpec
 from systemai.core.capabilities import default_capabilities
 from systemai.security.approvals import ApprovalStore
-from systemai.security.kernel import SecurityContext, SecurityKernelV1
+from systemai.security.kernel import SecurityContext, SecurityKernel
 from systemai.security.signing import CapabilitySigner, CapabilityVerifier
-from systemai.verification.v1_verifier import VerifierV1
+from systemai.verification.postcondition import PostconditionVerifier
 
 
 def build(tmp_path: Path):
     signer = CapabilitySigner.generate()
     approvals = ApprovalStore(tmp_path / "s.sqlite3")
-    kernel = SecurityKernelV1(registry=default_capabilities(), signer=signer, approvals=approvals)
+    kernel = SecurityKernel(registry=default_capabilities(), signer=signer, approvals=approvals)
     return signer, approvals, kernel
 
 
@@ -86,14 +86,14 @@ def test_parameter_paths_cannot_escape_project_scope(tmp_path: Path, capability:
     assert result.decision.decision == "deny"
 
 
-def test_remote_health_check_is_not_a_v1_action(tmp_path: Path):
+def test_remote_health_check_is_not_a_runtime_action(tmp_path: Path):
     signer, approvals, kernel = build(tmp_path)
     action = ActionIntent(task_id="t1", capability="http.health", target=ActionTarget(url="https://example.com/health"), expected_result="healthy")
     result = kernel.authorize(action, SecurityContext(actor_id="u", session_id="s", task_id="t1", executor_id="http", autonomy_mode="standard_auto"))
     assert result.decision.decision == "deny"
 
 
-def test_remote_database_probe_is_not_a_v1_action(tmp_path: Path):
+def test_remote_database_probe_is_not_a_runtime_action(tmp_path: Path):
     signer, approvals, kernel = build(tmp_path)
     action = ActionIntent(task_id="t1", capability="database.inspect", parameters={"host": "db.example.com", "port": 5432}, expected_result="healthy")
     result = kernel.authorize(action, SecurityContext(actor_id="u", session_id="s", task_id="t1", executor_id="diagnostic", autonomy_mode="standard_auto"))
@@ -136,6 +136,6 @@ async def test_verifier_cannot_probe_files_outside_the_action_scope(tmp_path: Pa
         resource_scope=[ResourceScope(kind="filesystem", value=str(root), recursive=True)],
     )
     result = ActionResult(action_id=action.action_id, status="completed", effect="confirmed", executor="filesystem")
-    verification = await VerifierV1().verify(action, result)
+    verification = await PostconditionVerifier().verify(action, result)
     assert verification.status.value == "failed"
     assert verification.checks[0]["error"] == "file verification is outside action scope"

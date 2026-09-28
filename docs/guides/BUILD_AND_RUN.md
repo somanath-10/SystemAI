@@ -69,7 +69,7 @@ cargo build --release
 ## 6. Acceptance demo
 
 ```bash
-python scripts/run_v1_acceptance.py
+python scripts/run_acceptance.py
 ```
 
 This creates a temporary project, creates a deliberate port conflict, lets the runtime diagnose it, approves the exact repair in the test harness, starts the intended app and verifies its health.

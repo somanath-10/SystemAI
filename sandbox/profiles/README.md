@@ -1,6 +1,6 @@
 # Sandbox Profiles
 
-V1 contract profiles:
+contract profiles:
 
 - `READ_ONLY`
 - `WORKSPACE_WRITE_NO_NETWORK`

@@ -16,7 +16,7 @@ api:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m systemai.api.run
 
 acceptance:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/run_v1_acceptance.py
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/run_acceptance.py
 
 schemas:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/generate_contract_schemas.py

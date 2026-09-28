@@ -6,7 +6,7 @@ import psutil
 import pytest
 
 from systemai.contracts.models import ActionJournalStatus
-from systemai.v1 import build_v1_runtime
+from systemai.runtime import build_runtime
 
 
 @pytest.mark.asyncio
@@ -17,11 +17,11 @@ async def test_pending_approval_survives_runtime_restart(tmp_path: Path):
         json.dumps({"name": "project", "runtime": "python", "start": [sys.executable, "app.py"]})
     )
     data_dir = tmp_path / "runtime"
-    first = build_v1_runtime(data_dir=data_dir)
+    first = build_runtime(data_dir=data_dir)
     session = await first.create_developer_task("Start the project", project, autonomy_mode="assist")
     assert session.state.value == "waiting_for_approval"
 
-    restarted = build_v1_runtime(data_dir=data_dir)
+    restarted = build_runtime(data_dir=data_dir)
     restored = restarted.sessions[session.task_id]
     assert restored.state.value == "waiting_for_approval"
     assert restored.pending_approvals == session.pending_approvals
@@ -35,7 +35,7 @@ async def test_interrupted_action_cannot_be_resumed_without_reconciliation(tmp_p
     (project / ".systemai" / "project.json").write_text(
         json.dumps({"name": "project", "runtime": "python", "start": [sys.executable, "app.py"]})
     )
-    runtime = build_v1_runtime(data_dir=tmp_path / "runtime")
+    runtime = build_runtime(data_dir=tmp_path / "runtime")
     session = await runtime.create_developer_task("Start the project", project)
     action = next(iter(session.graph.nodes.values())).action
     runtime.journal.transition(action, ActionJournalStatus.AUTHORIZED)
@@ -53,7 +53,7 @@ async def test_resource_wait_resumes_after_the_lease_is_released(tmp_path: Path)
     (project / ".systemai" / "project.json").write_text(
         json.dumps({"name": "project", "runtime": "python", "start": [sys.executable, "-c", "import time; time.sleep(5)"]})
     )
-    runtime = build_v1_runtime(data_dir=tmp_path / "runtime")
+    runtime = build_runtime(data_dir=tmp_path / "runtime")
     session = await runtime.create_developer_task("Start the project", project)
     action_id = next(iter(session.pending_approvals))
     lease = runtime.leases.acquire_many([f"filesystem:{project}"], task_id="other", node_id="other")[0]

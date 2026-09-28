@@ -31,9 +31,9 @@ Everything that touches the outside world is replaceable behind an adapter:
 
 This lets teams develop modules in parallel and test them with mock backends.
 
-## Why V1 uses SQLite
+## Why first release uses SQLite
 
-V1 uses SQLite in WAL mode because a single-device local agent benefits from low operational overhead, transactional consistency, easy backup, and fast iteration. The event log is the durable truth; projections can later move to PostgreSQL or specialized stores without changing agent contracts.
+first release uses SQLite in WAL mode because a single-device local agent benefits from low operational overhead, transactional consistency, easy backup, and fast iteration. The event log is the durable truth; projections can later move to PostgreSQL or specialized stores without changing agent contracts.
 
 Scale-out trigger examples:
 
@@ -63,7 +63,7 @@ A new capability is accepted only when it has:
 ```bash
 make compile
 make test
-python scripts/run_v1_acceptance.py
+python scripts/run_acceptance.py
 ```
 
 Use the mock executor for orchestration tests. Use a real backend only in platform integration suites.

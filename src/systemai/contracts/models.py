@@ -215,7 +215,7 @@ class ActionIntent(BaseModel):
     expected_effects: list[str] = Field(default_factory=list)
     forbidden_effects: list[str] = Field(default_factory=list)
     resource_scope: list[ResourceScope] = Field(default_factory=list)
-    risk: RiskLevel = RiskLevel.LOW  # legacy field, treated as planner hint only in V1 kernel
+    risk: RiskLevel = RiskLevel.LOW  # legacy field, treated as planner hint only in kernel
     risk_hint: RiskLevel | None = None
     reversible: bool = True  # legacy/planner hint only
     expected_reversibility: bool | None = None

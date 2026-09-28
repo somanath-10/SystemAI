@@ -21,7 +21,7 @@ def _bounded_int(value: object, *, default: int, maximum: int, name: str) -> int
     return result
 
 
-class HttpExecutorV1(AuthorizedExecutor):
+class HttpExecutor(AuthorizedExecutor):
     def __init__(self, *, verifier, event_store=None) -> None:
         super().__init__(name="http", verifier=verifier, event_store=event_store)
 
@@ -34,7 +34,7 @@ class HttpExecutorV1(AuthorizedExecutor):
         if not url:
             return ActionResult(action_id=action.action_id, status="failed", effect="failed", executor=self.name, error="http.health requires URL")
         if not local_health_url(str(url)):
-            return ActionResult(action_id=action.action_id, status="rejected", effect="failed", executor=self.name, error="http.health only permits loopback HTTP(S) URLs in V1")
+            return ActionResult(action_id=action.action_id, status="rejected", effect="failed", executor=self.name, error="http.health only permits loopback HTTP(S) URLs")
         try:
             timeout = float(action.parameters.get("timeout", 3.0))
             if not 0 < timeout <= 30:

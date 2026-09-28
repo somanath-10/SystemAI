@@ -1,12 +1,12 @@
-# SystemAI V1 Architecture
+# SystemAI first release Architecture
 
 ## 1. Purpose
 
-V1 implements the first production vertical from the consolidated blueprint: **developer-environment diagnosis and bounded repair**. It uses production-oriented contracts so later desktop/browser/local-model capabilities plug in without weakening the authority boundary.
+first release implements the first production vertical from the consolidated blueprint: **developer-environment diagnosis and bounded repair**. It uses production-oriented contracts so later desktop/browser/local-model capabilities plug in without weakening the authority boundary.
 
 ## 2. Corrected process architecture
 
-The master V3 source contains both the correct authority invariant and a visual diagram whose process order could be misread as placing security authorization before an action exists. V1 resolves that with this explicit topology:
+The master V3 source contains both the correct authority invariant and a visual diagram whose process order could be misread as placing security authorization before an action exists. first release resolves that with this explicit topology:
 
 ```text
 USER / EVENT
@@ -58,7 +58,7 @@ INDEPENDENT VERIFIER
 
 The kernel may also authenticate sessions/IPC separately, but **authorization of a consequential operation happens after a typed ActionIntent exists**.
 
-## 3. V1 modules
+## 3. first release modules
 
 ### 3.1 Contracts
 
@@ -82,9 +82,9 @@ Defines:
 
 ### 3.2 Planner
 
-`planner/developer_v1.py`
+`planner/developer.py`
 
-V1 intentionally uses one planner. The current implementation combines deterministic project inspection with typed remediation planning. A frontier planner can later implement the same output contracts.
+first release intentionally uses one planner. The current implementation combines deterministic project inspection with typed remediation planning. A frontier planner can later implement the same output contracts.
 
 ### 3.3 Task DAG
 
@@ -155,7 +155,7 @@ Executors have verification keys only and cannot mint authority.
 
 `orchestration/event_store.py`
 
-SQLite/WAL is the V1 runtime source of truth. Events are append-only and hash chained.
+SQLite/WAL is the first release runtime source of truth. Events are append-only and hash chained.
 
 Typical events:
 
@@ -194,19 +194,19 @@ Unexpected shutdown after dispatch is reconciled as `COMMIT_STATUS_UNKNOWN`; Sys
 
 Core depends on the abstract `Executor`, not Cua, Playwright, or OS-specific APIs.
 
-V1 executors:
+first release executors:
 
-- FileSystemExecutorV1
-- ProcessExecutorV1
-- DiagnosticExecutorV1
-- HttpExecutorV1
-- SandboxExecutorV1
+- FileSystemExecutor
+- ProcessExecutor
+- DiagnosticExecutor
+- HttpExecutor
+- SandboxExecutor
 
 Earlier Cua/Playwright adapters remain in the repository for later versions.
 
 ### 3.10 Independent verification
 
-`verification/v1_verifier.py`
+`verification/postcondition.py`
 
 Hard checks include:
 
@@ -219,7 +219,7 @@ Hard checks include:
 
 Executor success alone never completes the node.
 
-## 4. V1 flagship workflow
+## 4. first release flagship workflow
 
 ```text
 Goal
@@ -238,7 +238,7 @@ Project-provided commands are untrusted provenance and therefore require approva
 
 ## 5. Scalability strategy
 
-V1 deliberately avoids Kafka, Neo4j, Redis and distributed services. SQLite/WAL plus explicit contracts provide faster development and easier deterministic testing.
+first release deliberately avoids Kafka, Neo4j, Redis and distributed services. SQLite/WAL plus explicit contracts provide faster development and easier deterministic testing.
 
 Scale-up path:
 
@@ -255,4 +255,4 @@ Scale-up path:
 - deterministic mocks and evaluation fixtures;
 - generated cross-language schemas planned before many services exist;
 - external projects wrapped by adapters rather than forked into core;
-- feature flags/version boundaries prevent unfinished V2/V3 systems from destabilizing V1.
+- feature flags/version boundaries prevent unfinished V2/V3 systems from destabilizing first release.

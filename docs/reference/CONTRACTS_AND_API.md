@@ -63,7 +63,7 @@ Carries source, freshness/generation, trust, sensitivity, hash, structured data,
 
 ### CapabilityDefinition
 
-V1 metadata includes:
+first release metadata includes:
 
 - canonical base risk;
 - executor;
@@ -82,7 +82,7 @@ Includes resource, holder task/node, lease ID, fencing token and expiry.
 
 Ed25519-signed claims bind exact action/executor/device/session/scope/parameters/approval/nonce.
 
-## V1 capabilities
+## first release capabilities
 
 ### Files
 
@@ -115,13 +115,13 @@ Ed25519-signed claims bind exact action/executor/device/session/scope/parameters
 - `sandbox.run`
 - `test.run`
 
-Desktop/browser capabilities from V0.2 remain registered for forward compatibility but are not part of V1's production acceptance gate.
+Desktop/browser capabilities from V0.2 remain registered for forward compatibility but are not part of first release's production acceptance gate.
 
 ## Local development HTTP API
 
 ### `GET /health`
 
-Returns V1 version and event-chain integrity.
+Returns first release version and event-chain integrity.
 
 ### `GET /capabilities`
 
@@ -162,4 +162,4 @@ Body:
 
 ## Production IPC note
 
-This HTTP interface is for V1 development and Command Center prototyping. Final privileged communication is expected to use authenticated Unix sockets on macOS/Linux and Windows named pipes on Windows.
+This HTTP interface is for first release development and Command Center prototyping. Final privileged communication is expected to use authenticated Unix sockets on macOS/Linux and Windows named pipes on Windows.

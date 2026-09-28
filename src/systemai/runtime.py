@@ -3,48 +3,48 @@ from __future__ import annotations
 from pathlib import Path
 
 from systemai.core.capabilities import default_capabilities
-from systemai.execution import DiagnosticExecutorV1, FileSystemExecutorV1, HttpExecutorV1, ProcessExecutorV1, SandboxExecutorV1
+from systemai.execution import DiagnosticExecutor, FileSystemExecutor, HttpExecutor, ProcessExecutor, SandboxExecutor
 from systemai.execution.base import ExecutionGateway
-from systemai.orchestration import ActionJournal, EventStore, ResourceLeaseManager, SystemAIV1Runtime
-from systemai.planner import DeveloperDiagnosisPlannerV1
-from systemai.security import ApprovalStore, CapabilitySigner, CapabilityVerifier, SecurityKernelV1
-from systemai.verification import VerifierV1
+from systemai.orchestration import ActionJournal, EventStore, ResourceLeaseManager, SystemAIRuntime
+from systemai.planner import DeveloperDiagnosisPlanner
+from systemai.security import ApprovalStore, CapabilitySigner, CapabilityVerifier, SecurityKernel
+from systemai.verification import PostconditionVerifier
 
 
 VERSION = "1.0.0"
 
 
-def build_v1_runtime(
+def build_runtime(
     *,
     data_dir: Path,
     autonomy_mode: str = "standard_auto",
-) -> SystemAIV1Runtime:
+) -> SystemAIRuntime:
     data_dir = Path(data_dir).expanduser().resolve(strict=False)
     data_dir.mkdir(parents=True, exist_ok=True)
-    store = EventStore(data_dir / "systemai-v1.sqlite3")
-    approvals = ApprovalStore(data_dir / "systemai-v1.sqlite3")
+    store = EventStore(data_dir / "systemai.sqlite3")
+    approvals = ApprovalStore(data_dir / "systemai.sqlite3")
     signer = CapabilitySigner.load_or_create(data_dir / "keys" / "capability-ed25519.pem")
     registry = default_capabilities()
-    kernel = SecurityKernelV1(registry=registry, signer=signer, approvals=approvals)
+    kernel = SecurityKernel(registry=registry, signer=signer, approvals=approvals)
     gateway = ExecutionGateway()
     for name, cls in [
-        ("filesystem", FileSystemExecutorV1),
-        ("process", ProcessExecutorV1),
-        ("diagnostic", DiagnosticExecutorV1),
-        ("http", HttpExecutorV1),
-        ("sandbox", SandboxExecutorV1),
+        ("filesystem", FileSystemExecutor),
+        ("process", ProcessExecutor),
+        ("diagnostic", DiagnosticExecutor),
+        ("http", HttpExecutor),
+        ("sandbox", SandboxExecutor),
     ]:
         verifier = CapabilityVerifier.from_pem(signer.public_key_pem(), executor_id=name, device_id="local")
-        if cls is FileSystemExecutorV1:
+        if cls is FileSystemExecutor:
             executor = cls(verifier=verifier, event_store=store, quarantine_root=data_dir / "quarantine")
         else:
             executor = cls(verifier=verifier, event_store=store)
         gateway.register(executor)
-    runtime = SystemAIV1Runtime(
-        planner=DeveloperDiagnosisPlannerV1(),
+    runtime = SystemAIRuntime(
+        planner=DeveloperDiagnosisPlanner(),
         security_kernel=kernel,
         gateway=gateway,
-        verifier=VerifierV1(),
+        verifier=PostconditionVerifier(),
         store=store,
         journal=ActionJournal(store),
         leases=ResourceLeaseManager(store),

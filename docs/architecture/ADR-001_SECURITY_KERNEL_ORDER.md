@@ -1,6 +1,6 @@
 # ADR-001 — Planner / Security Kernel Process Order
 
-**Status:** Accepted for SystemAI V1
+**Status:** Accepted for SystemAI first release
 
 ## Context
 
@@ -12,7 +12,7 @@ One visual V3 process diagram placed the Rust Security Kernel between the UI and
 
 ## Decision
 
-SystemAI V1 uses two separate interactions:
+SystemAI first release uses two separate interactions:
 
 1. **Session/transport trust:** UI and orchestrator communication is authenticated and narrow.
 2. **Action authority:** the orchestrator proposes a typed ActionIntent; only then does the Security Kernel calculate canonical risk/scope/approval and issue a signed capability.

@@ -1,5 +1,5 @@
 from .approvals import ApprovalStore
-from .kernel import SecurityContext, SecurityKernelV1
+from .kernel import SecurityContext, SecurityKernel
 from .policy import PolicyContext, PolicyKernel
 from .prompt_boundary import *  # noqa: F401,F403
 from .redaction import *  # noqa: F401,F403
@@ -9,7 +9,7 @@ from .tokens import CapabilityTokenService
 __all__ = [
     "ApprovalStore",
     "SecurityContext",
-    "SecurityKernelV1",
+    "SecurityKernel",
     "PolicyContext",
     "PolicyKernel",
     "CapabilitySigner",

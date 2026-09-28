@@ -7,12 +7,12 @@ import os
 import sys
 from pathlib import Path
 
-from systemai.v1 import VERSION, build_v1_runtime
+from systemai.runtime import VERSION, build_runtime
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="systemai", description="SystemAI V1 - trusted local developer diagnosis runtime")
-    p.add_argument("--data-dir", default=os.environ.get("SYSTEMAI_DATA_DIR", str(Path.home() / ".systemai" / "v1")))
+    p = argparse.ArgumentParser(prog="systemai", description="SystemAI — trusted local developer diagnosis runtime")
+    p.add_argument("--data-dir", default=os.environ.get("SYSTEMAI_DATA_DIR", str(Path.home() / ".systemai" / "runtime")))
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("version")
     d = sub.add_parser("diagnose", help="Diagnose and repair a declared development project")
@@ -23,12 +23,12 @@ def _parser() -> argparse.ArgumentParser:
     e = sub.add_parser("events", help="Show recent durable events")
     e.add_argument("--task-id")
     e.add_argument("--limit", type=int, default=200)
-    sub.add_parser("doctor", help="Check V1 local prerequisites")
+    sub.add_parser("doctor", help="Check local prerequisites")
     return p
 
 
 async def _diagnose(args) -> int:
-    runtime = build_v1_runtime(data_dir=Path(args.data_dir), autonomy_mode=args.autonomy)
+    runtime = build_runtime(data_dir=Path(args.data_dir), autonomy_mode=args.autonomy)
     session = await runtime.create_developer_task(args.goal, args.project)
     while session.state.value == "waiting_for_approval":
         action_id, approval_id = next(iter(session.pending_approvals.items()))
@@ -78,7 +78,7 @@ def main() -> None:
     if args.cmd == "diagnose":
         raise SystemExit(asyncio.run(_diagnose(args)))
     if args.cmd == "events":
-        runtime = build_v1_runtime(data_dir=data_dir)
+        runtime = build_runtime(data_dir=data_dir)
         print(json.dumps(runtime.store.list_events(task_id=args.task_id, limit=args.limit), indent=2, default=str))
         return
 

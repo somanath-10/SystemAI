@@ -103,6 +103,6 @@ Rust native helper with:
 
 Collectors for files, apps, crashes, ports, network, disk, CPU/memory and permissions. Rule/anomaly filters run before invoking expensive AI diagnosis.
 
-## V1.0 target
+## first release.0 target
 
 A local-first SystemAI capable of long cross-application workflows, common system/project diagnosis and repair, UI recovery, verified procedural memory and auditable policy-controlled autonomy.

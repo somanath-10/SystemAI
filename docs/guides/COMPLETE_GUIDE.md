@@ -1,6 +1,6 @@
 # SystemAI Complete Guide
 
-This guide explains the project from original idea through the open-source research, the consolidated V3 production architecture, the V1 release scope, how the code works, how to run it, and how later versions extend it.
+This guide explains the project from original idea through the open-source research, the consolidated V3 production architecture, the declared release scope, how the code works, how to run it, and how later versions extend it.
 
 ## 1. Original idea
 
@@ -49,9 +49,9 @@ Key architecture lessons:
 
 See `roadmap/VERSIONING_AND_ROADMAP.md`.
 
-V1 intentionally delivers a complete trusted developer-diagnosis vertical slice before attempting universal desktop automation.
+first release intentionally delivers a complete trusted developer-diagnosis vertical slice before attempting universal desktop automation.
 
-## 5. V1 runtime lifecycle
+## 5. first release runtime lifecycle
 
 ### 5.1 Receive goal
 
@@ -77,11 +77,11 @@ Read-only `ProjectInspector` gathers facts. Environment inspection reveals key n
 
 ### 5.4 Diagnose
 
-`DeveloperDiagnosisEngineV1` converts evidence into explicit hypotheses and typed recommended actions.
+`DeveloperDiagnosisEngine` converts evidence into explicit hypotheses and typed recommended actions.
 
 ### 5.5 Build DAG
 
-`DeveloperDiagnosisPlannerV1` creates a validated TaskGraph with dependencies and resource requirements.
+`DeveloperDiagnosisPlanner` creates a validated TaskGraph with dependencies and resource requirements.
 
 ### 5.6 Acquire resource leases
 
@@ -131,7 +131,7 @@ Capability registry and validated TaskGraph.
 Python reference Security Kernel, approval store, signing, provenance and legacy compatibility code.
 
 ### `src/systemai/orchestration`
-EventStore, ActionJournal, ResourceLeaseManager and V1 runtime.
+EventStore, ActionJournal, ResourceLeaseManager and first release runtime.
 
 ### `src/systemai/execution`
 Execution gateway and capability-specific executors/adapters.
@@ -140,7 +140,7 @@ Execution gateway and capability-specific executors/adapters.
 Project inspection and evidence-driven developer diagnosis.
 
 ### `src/systemai/planner`
-One V1 planner plus retained adapters from earlier experiments.
+One first release planner plus retained adapters from earlier experiments.
 
 ### `src/systemai/verification`
 Independent postcondition verification.
@@ -189,7 +189,7 @@ Do not import its security assumptions into the core. For example Cua may enforc
 
 - deterministic operations first;
 - narrow dynamic tool catalogs;
-- one planner in V1;
+- one planner in first release;
 - local read-only observations where possible;
 - no continuous screenshots/model calls;
 - direct parsers/APIs before GUI;
@@ -202,7 +202,7 @@ The permanent ladder is:
 
 `deterministic -> qualified skill -> local small intelligence -> local LLM/VLM -> cheap specialist API -> premium frontier reasoner`.
 
-V1 records the interfaces/metrics foundation but does not prematurely optimize planner routing before baseline evaluation exists.
+first release records the interfaces/metrics foundation but does not prematurely optimize planner routing before baseline evaluation exists.
 
 ## 12. Privacy strategy
 
@@ -229,6 +229,6 @@ Before a consumer/enterprise release:
 - crash reconciliation tests;
 - penetration/threat review.
 
-## 14. Exact V1 limitation statement
+## 14. Exact first release limitation statement
 
-The ZIP is a working V1 for the declared **Trusted Core + Developer Diagnosis** release scope. It is not the final universal autonomous desktop product. Real system-wide GUI/browser/local-model/voice/multi-platform functions are versioned explicitly rather than represented as complete when they have not yet been validated.
+The ZIP is a working first release for the declared **Trusted Core + Developer Diagnosis** release scope. It is not the final universal autonomous desktop product. Real system-wide GUI/browser/local-model/voice/multi-platform functions are versioned explicitly rather than represented as complete when they have not yet been validated.

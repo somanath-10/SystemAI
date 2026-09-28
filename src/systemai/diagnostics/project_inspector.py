@@ -58,7 +58,7 @@ def local_health_url(url: str | None) -> bool:
 
 
 class ProjectInspector:
-    """Read-only observation plane for the V1 developer diagnosis wedge."""
+    """Read-only observation plane for the developer diagnosis wedge."""
 
     def load_manifest(self, root: Path) -> ProjectManifest:
         candidates = [root / ".systemai" / "project.json", root / "systemai.project.json"]

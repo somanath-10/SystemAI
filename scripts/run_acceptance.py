@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import psutil
 
-from systemai.v1 import build_v1_runtime
+from systemai.runtime import build_runtime
 from systemai.diagnostics.ports import port_is_listening
 
 
@@ -34,7 +34,7 @@ def wait_port(port: int, timeout: float = 5) -> None:
 
 
 async def main() -> int:
-    with tempfile.TemporaryDirectory(prefix="systemai-v1-acceptance-") as td:
+    with tempfile.TemporaryDirectory(prefix="systemai-acceptance-") as td:
         root = Path(td)
         project = root / "project"
         (project / ".systemai").mkdir(parents=True)
@@ -55,7 +55,7 @@ async def main() -> int:
         target_pid = None
         try:
             wait_port(port)
-            runtime = build_v1_runtime(data_dir=root / "runtime", autonomy_mode="standard_auto")
+            runtime = build_runtime(data_dir=root / "runtime", autonomy_mode="standard_auto")
             session = await runtime.create_developer_task("Find why this project is not running and fix it.", project)
             approvals = 0
             while session.state.value == "waiting_for_approval":

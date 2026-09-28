@@ -4,17 +4,17 @@ import pytest
 
 from systemai.contracts.models import ActionIntent, ActionTarget, ResourceScope
 from systemai.core.capabilities import default_capabilities
-from systemai.execution.filesystem_v1 import FileSystemExecutorV1
+from systemai.execution.filesystem import FileSystemExecutor
 from systemai.orchestration import EventStore
 from systemai.security.approvals import ApprovalStore
-from systemai.security.kernel import SecurityContext, SecurityKernelV1
+from systemai.security.kernel import SecurityContext, SecurityKernel
 from systemai.security.signing import CapabilitySigner, CapabilityVerifier
 
 
 def _executor(tmp_path: Path):
     signer = CapabilitySigner.generate()
-    kernel = SecurityKernelV1(registry=default_capabilities(), signer=signer, approvals=ApprovalStore(tmp_path / "events.sqlite3"))
-    executor = FileSystemExecutorV1(
+    kernel = SecurityKernel(registry=default_capabilities(), signer=signer, approvals=ApprovalStore(tmp_path / "events.sqlite3"))
+    executor = FileSystemExecutor(
         verifier=CapabilityVerifier.from_pem(signer.public_key_pem(), executor_id="filesystem", device_id="local"),
         event_store=EventStore(tmp_path / "events.sqlite3"),
     )

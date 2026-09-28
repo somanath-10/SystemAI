@@ -1,6 +1,6 @@
 # SystemAI Full Product Architecture
 
-This document is the concise current architecture spanning V1 through V5. The unabridged design history and research rationale remain in `docs/source/SystemAI_MASTER_BLUEPRINT_UPDATED.md`.
+This document is the concise current architecture spanning first release through V5. The unabridged design history and research rationale remain in `docs/source/SystemAI_MASTER_BLUEPRINT_UPDATED.md`.
 
 ## Product
 
@@ -180,7 +180,7 @@ Secret Broker stores credentials in OS-native secure storage and enforces origin
 
 ## Product releases
 
-- V1: trusted core + developer diagnosis
+- first release: trusted core + developer diagnosis
 - V2: production macOS desktop + browser + visual fallback
 - V3: cost/local intelligence + skills + monitoring + voice + demonstrations
 - V4: Windows/Linux + multi-device

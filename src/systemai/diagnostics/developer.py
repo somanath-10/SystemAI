@@ -16,7 +16,7 @@ from systemai.contracts.models import (
 from systemai.diagnostics.project_inspector import ProjectInspector, project_path
 
 
-class DeveloperDiagnosisEngineV1:
+class DeveloperDiagnosisEngine:
     """Evidence-driven diagnosis for the first SystemAI product wedge."""
 
     def __init__(self, inspector: ProjectInspector | None = None) -> None:
@@ -31,12 +31,12 @@ class DeveloperDiagnosisEngineV1:
 
         if facts.get("manifest_error"):
             hypotheses.append(Hypothesis(code="invalid_manifest", cause=str(facts["manifest_error"]), confidence=1.0, status="confirmed"))
-            return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project manifest is invalid; V1 will not infer commands or paths from it.")
+            return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project manifest is invalid; SystemAI will not infer commands or paths from it.")
 
         if facts["manifest_issues"]:
             issues = "; ".join(facts["manifest_issues"])
             hypotheses.append(Hypothesis(code="unsafe_manifest", cause=issues, confidence=1.0, status="confirmed"))
-            return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project manifest requests paths or a health check outside the V1 local project boundary.")
+            return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project manifest requests paths or a health check outside the local project boundary.")
 
         if facts["health"].get("ok"):
             hypotheses.append(Hypothesis(code="already_healthy", cause="Configured health endpoint is already healthy.", supporting_evidence=[str(facts["health"])], confidence=1.0, status="confirmed"))
@@ -45,7 +45,7 @@ class DeveloperDiagnosisEngineV1:
         missing_env = facts["env"].get("missing_keys") or []
         if missing_env:
             hypotheses.append(Hypothesis(code="missing_environment", cause=f"Required environment keys are missing: {', '.join(missing_env)}", supporting_evidence=[".env/.env.example shape inspection"], discriminating_test="Provide or configure missing values without exposing secrets.", confidence=0.98, status="confirmed"))
-            # Do not invent secret values. V1 safely stops rather than guessing.
+            # Do not invent secret values. Stop safely rather than guessing.
             return DiagnosisReport(project_root=str(root), facts=facts, hypotheses=hypotheses, recommended_actions=[], summary="Project cannot be safely repaired automatically because required environment values are missing.")
 
         listeners = facts["port"].get("listeners") or []

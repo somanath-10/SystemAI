@@ -1,6 +1,6 @@
 # Dependency and License Inventory
 
-## V1 direct Python runtime dependencies
+## first release direct Python runtime dependencies
 
 The authoritative version bounds are in `pyproject.toml`.
 

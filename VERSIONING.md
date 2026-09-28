@@ -1,6 +1,6 @@
 # SystemAI Product Versions
 
-- **V1 (this ZIP):** Trusted Core + Developer Diagnosis.
+- **Initial release:** Trusted Core + Developer Diagnosis.
 - **V2:** production macOS desktop + browser execution + visual fallback.
 - **V3:** cost/local intelligence, skills, monitoring, voice, demonstrations.
 - **V4:** Windows/Linux + multi-device.

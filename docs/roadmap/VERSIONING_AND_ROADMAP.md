@@ -2,9 +2,9 @@
 
 ## Why the product is split into versions
 
-The master blueprint has a broad full-product V1 completion gate that includes macOS desktop control, browser control, sandboxing, skills, cost routing, security regression, installer/update hardening and other pieces. For fast, measurable development, this repository decomposes that program into smaller product releases while preserving the broader completion gate in the source blueprint.
+The master blueprint has a broad full-product first release completion gate that includes macOS desktop control, browser control, sandboxing, skills, cost routing, security regression, installer/update hardening and other pieces. For fast, measurable development, this repository decomposes that program into smaller product releases while preserving the broader completion gate in the source blueprint.
 
-## V1 — Trusted Core + Developer Diagnosis
+## first release — Trusted Core + Developer Diagnosis
 
 **Status in this ZIP:** implemented end-to-end for the declared release scope.
 
@@ -25,7 +25,7 @@ Includes:
 - Command Center source.
 - Full project documentation.
 
-V1 flagship goal:
+first release flagship goal:
 
 > Find why this project is not running and fix it.
 

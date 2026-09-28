@@ -127,7 +127,7 @@ export default function App() {
       <header className="topbar">
         <div>
           <div className="eyebrow">Trusted local-first operating intelligence</div>
-          <h1>SystemAI V1</h1>
+          <h1>SystemAI</h1>
         </div>
         <div className="status-stack">
           <span className="status"><i /> Local control plane</span>
@@ -143,7 +143,7 @@ export default function App() {
           <textarea id="goal" value={goal} onChange={(e) => setGoal(e.target.value)} />
           <button onClick={createTask} disabled={busy || !goal.trim() || !projectRoot.trim()}>{busy ? "Inspecting…" : "Diagnose"}</button>
         </div>
-        <p className="hint">V1 reads project/Git/process/port/config/package/log state locally, generates bounded typed actions, and pauses on canonical approval boundaries.</p>
+        <p className="hint">reads project/Git/process/port/config/package/log state locally, generates bounded typed actions, and pauses on canonical approval boundaries.</p>
       </section>
 
       {error && <div className="error">{error}</div>}
@@ -199,7 +199,7 @@ export default function App() {
         </section>
 
         <aside className="panel architecture">
-          <span className="eyebrow">V1 authority path</span>
+          <span className="eyebrow">authority path</span>
           <h2>Execution chain</h2>
           {[
             "GoalContract",

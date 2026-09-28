@@ -54,7 +54,7 @@ def _env_keys(path: Path) -> list[str]:
     return sorted(set(keys))
 
 
-class DiagnosticExecutorV1(AuthorizedExecutor):
+class DiagnosticExecutor(AuthorizedExecutor):
     CAPABILITIES = {
         "git.inspect",
         "environment.inspect",

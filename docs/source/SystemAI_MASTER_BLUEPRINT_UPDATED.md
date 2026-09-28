@@ -1959,7 +1959,7 @@ Examples from the reviewed ecosystem:
 - UFO: permissive MIT reference.
 - Cua: permissive MIT reference/dependency.
 - Agent-S: Apache-2.0 reference.
-- agent-ctrl: Apache-style/permissive reference; verify current release before bundling.
+- agent-ctrl: Apache-style/permissive reference; verify the package version before bundling.
 - Agent Desktop/Open Computer Use/Browser Harness/Stagehand: verify exact package/release license during integration.
 - Skyvern: AGPL concerns for copied/linked deployment; keep as architecture reference or isolated service unless licensing is intentionally accepted.
 - OmniParser: code/model weights may have different terms; review each asset.
@@ -2003,7 +2003,7 @@ Only inside disposable VM/test environments; never the consumer default.
 
 SystemAI should not be called complete merely when it can click applications.
 
-V1 completion gate:
+first release completion gate:
 
 - real macOS daily-use workflows stable,
 - Windows and Linux basic execution validated,
@@ -2376,7 +2376,7 @@ The planner may refine a plan but may not silently redefine the user's objective
 
 ## 35.8 Planner architecture
 
-V1 should use **one strong planner**, not a swarm of reasoning agents.
+first release should use **one strong planner**, not a swarm of reasoning agents.
 
 The planner receives only:
 
@@ -2394,7 +2394,7 @@ The planner outputs structured data only:
 - clarification requests when genuinely required;
 - recovery/replan proposals.
 
-Do not begin V1 with Supervisor LLM + Browser Agent LLM + Coding Agent LLM + Desktop Agent LLM + Verifier LLM. Specialized tools are enough initially. Additional reasoning agents should be introduced only when evaluation proves a measurable benefit.
+Do not begin first release with Supervisor LLM + Browser Agent LLM + Coding Agent LLM + Desktop Agent LLM + Verifier LLM. Specialized tools are enough initially. Additional reasoning agents should be introduced only when evaluation proves a measurable benefit.
 
 ## 35.9 Task DAG
 
@@ -3074,7 +3074,7 @@ symptom
 
 The diagnosis engine never bypasses policy because it is "repairing" the machine.
 
-## 35.28 Developer diagnosis V1 workflow
+## 35.28 Developer diagnosis first release workflow
 
 For `Find why this project is not running and fix it`:
 
@@ -3563,7 +3563,7 @@ SystemAI should borrow specific ideas rather than make any one external agent fr
 
 **Use:** DAG decomposition, capability-aware assignment, state-machine ideas, future multi-device concepts.
 
-**Do not use as:** V1 foundation or justification for an early multi-agent architecture.
+**Do not use as:** first release foundation or justification for an early multi-agent architecture.
 
 ### Agent-S
 
@@ -4209,7 +4209,7 @@ Only after one-device execution is stable:
 - remote observation/verification;
 - reconnect/offline semantics.
 
-## 35.50 Features explicitly deferred from V1
+## 35.50 Features explicitly deferred from first release
 
 Do not allow these to block the first useful release:
 
@@ -4229,9 +4229,9 @@ general root/admin shell
 
 They may be revisited after evidence shows they are necessary.
 
-## 35.51 V1 completion definition
+## 35.51 first release completion definition
 
-SystemAI V1 should be considered complete only when all of the following are true:
+SystemAI first release should be considered complete only when all of the following are true:
 
 ```text
 macOS-first production path is reliable;
@@ -4256,7 +4256,7 @@ benchmark/security regression suites run in CI;
 limitations are documented.
 ```
 
-Windows/Linux may remain later platform phases; V1 should not pretend they have identical maturity if they do not.
+Windows/Linux may remain later platform phases; first release should not pretend they have identical maturity if they do not.
 
 ## 35.52 Initial quantitative acceptance targets
 

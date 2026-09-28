@@ -1,4 +1,4 @@
-from .developer_v1 import DeveloperDiagnosisEngineV1
+from .developer import DeveloperDiagnosisEngine
 from .project_inspector import ProjectInspector
 
-__all__ = ["DeveloperDiagnosisEngineV1", "ProjectInspector"]
+__all__ = ["DeveloperDiagnosisEngine", "ProjectInspector"]

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "planner": "deterministic-developer-diagnosis-v1",
+  "planner": "deterministic-developer-diagnosis-runtime",
   "remote_models_required": false,
   "future_cost_ladder": [
     "deterministic",

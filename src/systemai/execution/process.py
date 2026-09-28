@@ -13,7 +13,7 @@ from systemai.execution.authorized import AuthorizedExecutor
 from systemai.execution.environment import clean_environment
 
 
-class ProcessExecutorV1(AuthorizedExecutor):
+class ProcessExecutor(AuthorizedExecutor):
     CAPABILITIES = {"process.list", "process.inspect", "process.start", "process.terminate"}
 
     def __init__(self, *, verifier, event_store=None) -> None:

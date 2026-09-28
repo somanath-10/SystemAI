@@ -31,7 +31,7 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-class FileSystemExecutorV1(AuthorizedExecutor):
+class FileSystemExecutor(AuthorizedExecutor):
     CAPABILITIES = {"file.read", "file.write", "file.move", "file.delete", "directory.list", "directory.create"}
 
     def __init__(self, *, verifier, event_store=None, quarantine_root: Path | None = None) -> None:
@@ -91,7 +91,7 @@ class FileSystemExecutorV1(AuthorizedExecutor):
             elif action.capability == "file.delete":
                 mode = str(action.parameters.get("mode", "quarantine"))
                 if mode not in {"quarantine", "trash"}:
-                    raise ValueError("V1 file.delete only supports quarantine/trash semantics")
+                    raise ValueError("file.delete only supports quarantine/trash semantics")
                 root = self.quarantine_root or path.parent / ".systemai-quarantine"
                 root.mkdir(parents=True, exist_ok=True)
                 destination = root / f"{path.name}.{uuid4().hex[:8]}"

@@ -30,7 +30,7 @@ make acceptance
 
 ## Runtime data
 
-Default: `~/.systemai/v1/`
+Default: `~/.systemai/runtime/`
 
 Contains:
 
@@ -96,7 +96,7 @@ Start `systemai-api` separately. Tauri integration is under `apps/desktop/src-ta
 Suggested:
 
 - `main` — always passes core/eval gates;
-- `feature/v1-*` — V1 maintenance;
+- `feature/maintenance-*` — first release maintenance;
 - `feature/v2-desktop-*` — macOS/Cua integration;
 - `feature/v2-browser-*` — browser profile/CDP;
 - security changes always include adversarial tests.

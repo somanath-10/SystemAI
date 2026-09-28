@@ -1,4 +1,4 @@
-# SystemAI V1 Known Limitations
+# SystemAI Known Limitations
 
 This file is intentionally explicit so the codebase is not confused with the final universal SystemAI vision.
 
@@ -8,7 +8,7 @@ The production Rust Security Kernel source is included, but the build environmen
 
 ## Desktop
 
-Existing V0.2 Cua/macOS code is retained but V1 does not claim the new V3 security model has been validated against real Finder/TextEdit/Calculator/Chrome on a Mac in this environment.
+Existing V0.2 Cua/macOS code is retained but does not claim the new V3 security model has been validated against real Finder/TextEdit/Calculator/Chrome on a Mac in this environment.
 
 ## Browser
 
@@ -16,11 +16,11 @@ Playwright scaffolding is retained. Dedicated SystemAI browser profile, Secret B
 
 ## Sandbox
 
-V1 command execution is argv-only and bounded. Strong network/filesystem isolation profiles fail closed if Docker/bwrap/firejail/platform sandbox is unavailable. `READ_ONLY` in the reference runtime is a bounded subprocess profile and is not a complete OS security sandbox on every platform.
+Sandbox command execution is argv-only and bounded. It requires an isolated Docker backend with networking disabled; unsupported profiles fail closed.
 
 ## Planner
 
-V1 uses the deterministic developer-diagnosis planner. A frontier structured planner adapter exists in earlier code but is not required for V1 acceptance and was not live-API tested here.
+SystemAI uses the deterministic developer-diagnosis planner. A frontier structured planner adapter exists in earlier code but is not required for acceptance and was not live-API tested here.
 
 ## Cost routing/local models
 

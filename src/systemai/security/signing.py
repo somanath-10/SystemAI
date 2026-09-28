@@ -35,22 +35,22 @@ def action_hash(action: ActionIntent) -> str:
 
 
 class CapabilitySigner:
-    """Ed25519 capability signer used by the V1 Python dev kernel.
+    """Ed25519 capability signer used by the Python dev kernel.
 
     Production architecture moves this private key into the Rust Security Kernel.
     Executors receive only the public key.
     """
 
-    def __init__(self, private_key: Ed25519PrivateKey, *, key_id: str = "v1-dev-ed25519") -> None:
+    def __init__(self, private_key: Ed25519PrivateKey, *, key_id: str = "local-ed25519") -> None:
         self._private = private_key
         self.key_id = key_id
 
     @classmethod
-    def generate(cls, *, key_id: str = "v1-dev-ed25519") -> "CapabilitySigner":
+    def generate(cls, *, key_id: str = "local-ed25519") -> "CapabilitySigner":
         return cls(Ed25519PrivateKey.generate(), key_id=key_id)
 
     @classmethod
-    def load_or_create(cls, path: Path, *, key_id: str = "v1-dev-ed25519") -> "CapabilitySigner":
+    def load_or_create(cls, path: Path, *, key_id: str = "local-ed25519") -> "CapabilitySigner":
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             try:

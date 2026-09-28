@@ -6,30 +6,30 @@
   "authority_invariant": "GoalContract -> DAG -> Lease -> ActionIntent -> Security Kernel -> Approval -> Signed Capability -> Executor -> Observation -> Verification -> Event/Audit",
   "status": {
     "python_runtime": "tested",
-    "v1_end_to_end_acceptance": "passed",
-    "tests_passed": 35,
+    "end_to_end_acceptance": "passed",
+    "tests_passed": 43,
     "capabilities_registered": 38,
     "rust_security_kernel_source": "included_not_compiled_in_build_environment",
     "command_center_source": "Vite production build tested",
-    "macos_desktop_v2_adapter": "retained_not_part_of_v1_acceptance"
+    "macos_desktop_v2_adapter": "retained_outside_current_acceptance"
   },
   "code_stats": {
-    "python_files": 100,
-    "python_lines": 8071,
-    "rust_files": 5,
-    "rust_lines": 235,
+    "python_files": 102,
+    "python_lines": 8464,
+    "rust_files": 7,
+    "rust_lines": 245,
     "typescript_files": 3,
-    "typescript_lines": 229,
-    "markdown_files": 44,
-    "markdown_lines": 9677,
-    "total_files_excluding_caches": 190
+    "typescript_lines": 238,
+    "markdown_files": 43,
+    "markdown_lines": 9668,
+    "total_files_excluding_caches": 191
   },
   "versions": {
-    "V1": "Trusted Core + Developer Diagnosis",
+    "initial": "Trusted Core + Developer Diagnosis",
     "V2": "macOS Desktop + Browser + Visual Fallback",
     "V3": "Cost Intelligence + Learning + Monitoring + Voice",
     "V4": "Windows/Linux + Multi-device",
     "V5": "Product/Enterprise Hardening"
   },
-  "source_blueprint_sha256": "d03318e74618cc854fd9b495896db010596e7dc161b68a406cf4f34bb9974f73"
+  "source_blueprint_sha256": "5427acde9b6b6a02d2ff345f0f4c29f3e4f6c91ae5d1574984cbab50a63c0a94"
 }

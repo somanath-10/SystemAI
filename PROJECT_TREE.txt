@@ -4,7 +4,7 @@ SystemAI/
 |       |-- src-tauri/                 # Tauri shell
 |       `-- ui/                        # React/Vite Command Center
 |-- build/reports/                     # recorded build outputs
-|-- config/                            # V1 model and policy defaults
+|-- config/                            # first release model and policy defaults
 |-- contracts/schema/                  # generated cross-language schemas
 |-- docs/                              # architecture, guides, security, roadmap
 |-- evals/systemai/catalog.json        # 50-case evaluation catalog
@@ -13,26 +13,26 @@ SystemAI/
 |   |-- privileged-helper/             # later elevated-helper contract
 |   `-- security-kernel/               # Rust production-target kernel
 |-- sandbox/profiles/
-|-- scripts/                           # doctor, schema, and V1 acceptance helpers
+|-- scripts/                           # doctor, schema, and first release acceptance helpers
 |-- src/systemai/
-|   |-- api/                           # V1 local HTTP control plane
+|   |-- api/                           # first release local HTTP control plane
 |   |-- contracts/                     # Pydantic contracts
 |   |-- core/                          # DAG, capabilities, legacy runtime
 |   |-- diagnostics/                   # inspector, diagnosis planner inputs, port probe
 |   |-- execution/                     # authorized filesystem/process/http/sandbox adapters
 |   |-- memory/                        # legacy memory/audit support
 |   |-- monitoring/
-|   |-- orchestration/                 # event store, journal, leases, V1 runtime
-|   |-- planner/                       # deterministic V1 developer planner
+|   |-- orchestration/                 # event store, journal, leases, first release runtime
+|   |-- planner/                       # deterministic first release developer planner
 |   |-- recovery/
 |   |-- security/                      # canonical policy, approvals, signed capabilities
 |   |-- verification/                  # independent postcondition verification
-|   `-- v1.py                          # V1 composition root
+|   `-- first_release.py                          # first release composition root
 |-- storage/
-|-- tests/                             # V0.2 regressions plus V1 unit/integration/security tests
-|-- BUILD_REPORT_V1.md
+|-- tests/                             # V0.2 regressions plus first release unit/integration/security tests
+|-- BUILD_REPORT.md
 |-- FILE_INDEX.txt                     # exhaustive source index
 |-- PROJECT_MANIFEST.json
 |-- README.md
 |-- pyproject.toml
-`-- requirements-v1.lock.txt
+`-- requirements.lock.txt
