@@ -7,6 +7,7 @@ from systemai.core.capabilities import default_capabilities
 from systemai.security.approvals import ApprovalStore
 from systemai.security.kernel import SecurityContext, SecurityKernel
 from systemai.security.signing import CapabilitySigner, CapabilityVerifier
+from systemai.runtime import build_runtime
 from systemai.verification.postcondition import PostconditionVerifier
 
 
@@ -119,6 +120,34 @@ def test_approval_cannot_be_changed_after_decision(tmp_path: Path):
     approvals.decide(approval_id, approved=True, approved_by="u")
     with pytest.raises(ValueError, match="already decided"):
         approvals.decide(approval_id, approved=False, approved_by="u")
+
+
+def test_approval_is_bound_to_exact_action_content(tmp_path: Path):
+    _signer, approvals, kernel = build(tmp_path)
+    action = ActionIntent(task_id="t1", capability="process.terminate", target=ActionTarget(process_id=123), expected_result="stop process")
+    context = SecurityContext(actor_id="u", session_id="s", task_id="t1", executor_id="process", autonomy_mode="standard_auto")
+    first = kernel.authorize(action, context)
+    approvals.decide(first.approval_id, approved=True, approved_by="u")
+    action.parameters["allow_kill"] = True
+    context.approval_id = first.approval_id
+    changed = kernel.authorize(action, context)
+    assert changed.decision.decision == "require_approval"
+    assert changed.approval_id != first.approval_id
+    assert approvals.get(changed.approval_id)["approved"] is None
+
+
+@pytest.mark.asyncio
+async def test_diagnosis_snapshot_does_not_expose_log_or_health_body(tmp_path: Path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "app.log").write_text("SECRET_LOG_VALUE")
+    runtime = build_runtime(data_dir=tmp_path / "data")
+    session = await runtime.create_developer_task("Inspect this project", project)
+    assert "SECRET_LOG_VALUE" not in str(session.snapshot())
+    assert "SECRET_LOG_VALUE" not in str(runtime.store.list_events(task_id=session.task_id))
+    facts = session.snapshot()["diagnosis"]["facts"]
+    assert all("tail" not in item for item in facts["logs"])
+    assert "body" not in runtime._redacted_facts({"health": {"body": "SECRET_HTTP_VALUE"}})["health"]
 
 
 @pytest.mark.asyncio

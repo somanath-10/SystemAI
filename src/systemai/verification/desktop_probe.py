@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from systemai.desktop import DesktopControlService
@@ -36,7 +37,7 @@ class DesktopVerificationProbe:
         matches = _matching_elements(snapshot.elements, params)
         return bool(matches), {
             "snapshot_id": snapshot.snapshot_id,
-            "matches": [m.model_dump(mode="json", exclude={"raw"}) for m in matches[:10]],
+            "matches": [m.model_dump(mode="json", exclude={"raw", "value"}) for m in matches[:10]],
             "degraded": snapshot.degraded,
             "truncated": snapshot.truncated,
         }
@@ -55,11 +56,20 @@ class DesktopVerificationProbe:
         passed = any(item.value == expected for item in matches)
         return passed, {
             "snapshot_id": snapshot.snapshot_id,
-            "expected": expected,
-            "actual_values": [item.value for item in matches[:10]],
+            "expected_sha256": hashlib.sha256(str(expected).encode()).hexdigest(),
+            "actual_sha256": [hashlib.sha256(str(item.value).encode()).hexdigest() for item in matches[:10]],
             "match_count": len(matches),
             "degraded": snapshot.degraded,
         }
+
+    async def element_value_sha256(self, params: dict[str, Any]) -> tuple[bool, Any]:
+        _, window = await self._resolve_window(params)
+        if window is None:
+            return False, {"reason": "window_not_found"}
+        snapshot = await self.desktop.snapshot_window(pid=window.pid, window_id=window.window_id, include_screenshot=False)
+        matches = _matching_elements(snapshot.elements, params)
+        hashes = [hashlib.sha256(str(item.value).encode()).hexdigest() for item in matches]
+        return str(params["sha256"]) in hashes, {"snapshot_id": snapshot.snapshot_id, "match_count": len(matches), "actual_sha256": hashes[:10]}
 
     async def _resolve_window(self, params: dict[str, Any]):
         pid = params.get("pid")

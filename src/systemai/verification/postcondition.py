@@ -8,6 +8,9 @@ import httpx
 import psutil
 
 from systemai.contracts.models import ActionIntent, ActionResult, VerificationResult, VerificationStatus
+from systemai.desktop import DesktopControlService
+from systemai.execution.browser import PlaywrightExecutor
+from systemai.verification.desktop_probe import DesktopVerificationProbe
 from systemai.diagnostics.ports import listening_connections
 from systemai.diagnostics.project_inspector import local_health_url
 
@@ -43,6 +46,11 @@ def _file_in_scope(path: Path, action: ActionIntent) -> bool:
 class PostconditionVerifier:
     """Independent postcondition verifier for capabilities."""
 
+    def __init__(self, desktop: DesktopControlService | None = None, browser: PlaywrightExecutor | None = None) -> None:
+        self.desktop = desktop
+        self.desktop_probe = DesktopVerificationProbe(desktop) if desktop else None
+        self.browser = browser
+
     async def verify(self, action: ActionIntent, result: ActionResult) -> VerificationResult:
         checks: list[dict] = []
         if result.status.value not in {"completed", "allowed"}:
@@ -61,6 +69,53 @@ class PostconditionVerifier:
 
     async def _check(self, kind: str, params: dict, action: ActionIntent, result: ActionResult) -> dict:
         try:
+            if kind == "browser.url_equals":
+                page = await self._browser_page()
+                expected = str(params["url"])
+                return {"kind": kind, "passed": page.url == expected, "actual": page.url, "expected": expected}
+            if kind == "browser.title_equals":
+                page = await self._browser_page()
+                actual = await page.title()
+                expected = str(params["title"])
+                return {"kind": kind, "passed": actual == expected, "actual": actual, "expected": expected}
+            if kind == "browser.text_visible":
+                page = await self._browser_page()
+                text = str(params["text"])
+                passed = await page.get_by_text(text, exact=True).first.is_visible()
+                return {"kind": kind, "passed": passed, "text": text}
+            if kind == "browser.value_sha256":
+                await self._browser_page()
+                assert self.browser is not None
+                locator = self.browser._locator(action)
+                actual = hashlib.sha256((await locator.input_value()).encode()).hexdigest()
+                return {"kind": kind, "passed": actual == params["sha256"], "sha256": actual}
+            if kind == "browser.download_sha256":
+                path = Path(str(result.output.get("path", ""))).expanduser()
+                expected = str(result.output.get("sha256", ""))
+                actual = _sha256(path) if _file_in_scope(path, action) and path.is_file() and path.stat().st_size <= 50_000_000 else None
+                return {"kind": kind, "passed": actual is not None and actual == expected, "path": str(path), "sha256": actual}
+            if kind == "browser.upload_selected":
+                await self._browser_page()
+                assert self.browser is not None
+                names = await self.browser._locator(action).evaluate("el => Array.from(el.files || []).map(file => file.name)")
+                expected = Path(str(action.parameters["path"])).name
+                return {"kind": kind, "passed": names == [expected], "file_names": names}
+            if kind == "desktop.apps_observed":
+                if self.desktop is None:
+                    return {"kind": kind, "passed": False, "error": "desktop verifier unavailable"}
+                apps = await self.desktop.list_apps()
+                return {"kind": kind, "passed": True, "app_count": len(apps)}
+            if kind in {"application.running", "window.exists", "ui.element_exists", "ui.element_value_sha256"}:
+                if self.desktop_probe is None:
+                    return {"kind": kind, "passed": False, "error": "desktop verifier unavailable"}
+                check = {
+                    "application.running": self.desktop_probe.application_running,
+                    "window.exists": self.desktop_probe.window_exists,
+                    "ui.element_exists": self.desktop_probe.element_exists,
+                    "ui.element_value_sha256": self.desktop_probe.element_value_sha256,
+                }[kind]
+                passed, detail = await check(params)
+                return {"kind": kind, "passed": passed, "detail": detail}
             if kind == "process.absent":
                 pid = int(params["pid"])
                 passed = not psutil.pid_exists(pid)
@@ -121,3 +176,8 @@ class PostconditionVerifier:
             return {"kind": kind, "passed": False, "error": "unsupported verification kind"}
         except Exception as exc:
             return {"kind": kind, "passed": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    async def _browser_page(self):
+        if self.browser is None:
+            raise RuntimeError("browser verifier unavailable")
+        return await self.browser.current_page()

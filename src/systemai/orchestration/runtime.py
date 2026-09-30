@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,15 +10,23 @@ from typing import Any
 from uuid import uuid4
 
 from systemai.contracts.models import (
+    ActionIntent,
     ActionJournalStatus,
     ActionResult,
+    ActionTarget,
     GoalContract,
+    ResourceScope,
+    RiskLevel,
     StepState,
     TaskState,
     VerificationResult,
+    VerificationSpec,
     VerificationStatus,
 )
 from systemai.core.task_graph import TaskGraph, TaskNode
+from systemai.desktop import DesktopControlService
+from systemai.execution.browser import PlaywrightExecutor
+from systemai.security.origin import browser_origin
 from systemai.execution.base import ExecutionGateway
 from systemai.orchestration.action_journal import ActionJournal
 from systemai.orchestration.event_store import EventStore
@@ -51,6 +60,7 @@ class TaskSession:
     verifications: dict[str, VerificationResult] = field(default_factory=dict)
     pending_approvals: dict[str, str] = field(default_factory=dict)  # action_id -> approval_id
     error: str | None = None
+    requested_control: TaskState | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def snapshot(self) -> dict[str, Any]:
@@ -98,6 +108,10 @@ class SystemAIRuntime:
         security_kernel: SecurityKernel,
         gateway: ExecutionGateway,
         verifier: PostconditionVerifier,
+        desktop: DesktopControlService | None = None,
+        browser: PlaywrightExecutor | None = None,
+        data_dir: Path | None = None,
+        allowed_applications: set[str] | None = None,
         store: EventStore,
         journal: ActionJournal,
         leases: ResourceLeaseManager,
@@ -107,6 +121,10 @@ class SystemAIRuntime:
         self.security_kernel = security_kernel
         self.gateway = gateway
         self.verifier = verifier
+        self.desktop = desktop
+        self.browser = browser
+        self.data_dir = data_dir
+        self.allowed_applications = allowed_applications or set()
         self.store = store
         self.journal = journal
         self.leases = leases
@@ -130,7 +148,8 @@ class SystemAIRuntime:
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         graph, report = await asyncio.to_thread(self.planner.plan, task_id=task_id, contract=contract, project_root=project_root)
         diagnosis = report.model_dump(mode="json")
-        self.store.append("ObservationReceived", {"kind": "developer_diagnosis", "summary": report.summary, "facts": self._redacted_facts(diagnosis.get("facts", {}))}, task_id=task_id)
+        diagnosis["facts"] = self._redacted_facts(diagnosis.get("facts", {}))
+        self.store.append("ObservationReceived", {"kind": "developer_diagnosis", "summary": report.summary, "facts": diagnosis["facts"]}, task_id=task_id)
         self.store.append("PlanCreated", {"nodes": graph.topological_order() if graph.nodes else [], "diagnosis": report.summary}, task_id=task_id)
         session = TaskSession(
             task_id=task_id,
@@ -155,6 +174,206 @@ class SystemAIRuntime:
         await self.run(task_id)
         return session
 
+    async def create_desktop_observation(self) -> TaskSession:
+        if self.desktop is None:
+            raise RuntimeError("desktop driver is unavailable")
+        status = await self.desktop.status()
+        if not status.available:
+            raise RuntimeError("desktop driver is unavailable")
+        task_id = f"task_{uuid4().hex[:16]}"
+        contract = GoalContract(objective="Inspect running desktop applications")
+        action = ActionIntent(
+            task_id=task_id,
+            node_id="observe-apps",
+            capability="application.list",
+            expected_result="Running applications are observed",
+            risk=RiskLevel.OBSERVE,
+            verification=[VerificationSpec(kind="desktop.apps_observed")],
+        )
+        graph = TaskGraph.from_nodes(task_id, [TaskNode(node_id="observe-apps", title="Inspect applications", action=action, max_attempts=1)])
+        self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
+        self.store.append("PlanCreated", {"nodes": ["observe-apps"]}, task_id=task_id)
+        session = TaskSession(task_id=task_id, contract=contract, project_root=Path.cwd(), graph=graph, diagnosis={"summary": "Desktop observation"})
+        self.sessions[task_id] = session
+        self._persist(session)
+        await self.run(task_id)
+        return session
+
+    async def create_desktop_task(
+        self,
+        *,
+        capability: str,
+        bundle_id: str,
+        window_title: str | None = None,
+        element_name: str | None = None,
+        element_role: str | None = None,
+        value: str | None = None,
+        verify_element_name: str | None = None,
+        verify_window_title: str | None = None,
+    ) -> TaskSession:
+        if self.desktop is None:
+            raise RuntimeError("desktop driver is unavailable")
+        status = await self.desktop.status()
+        if not status.available:
+            raise RuntimeError("desktop driver is unavailable")
+        if bundle_id.casefold() not in {item.casefold() for item in self.allowed_applications}:
+            raise ValueError("application is outside the configured desktop allowlist")
+        supported = {"application.launch", "window.observe", "ui.click", "ui.set_value"}
+        if capability not in supported:
+            raise ValueError("unsupported desktop capability")
+        if capability != "application.launch" and not window_title:
+            raise ValueError("desktop action requires an exact window title")
+        if capability in {"window.observe", "ui.click", "ui.set_value"} and (not status.permissions or status.permissions.accessibility is not True):
+            raise RuntimeError("desktop Accessibility permission is not granted")
+        if capability in {"ui.click", "ui.set_value"} and not (element_name or element_role):
+            raise ValueError("UI action requires an element name or role")
+        if capability == "ui.click" and not (verify_element_name or verify_window_title):
+            raise ValueError("ui.click requires a fresh, verifiable postcondition")
+        if capability == "ui.set_value" and value is None:
+            raise ValueError("ui.set_value requires a value")
+        task_id = f"task_{uuid4().hex[:16]}"
+        target = ActionTarget(bundle_id=bundle_id, window_title=window_title, element_name=element_name, element_role=element_role)
+        params: dict[str, Any] = {}
+        verify_target = {"bundle_id": bundle_id, "window_title": window_title}
+        specs: list[VerificationSpec]
+        if capability == "application.launch":
+            specs = [VerificationSpec(kind="application.running", parameters={"bundle_id": bundle_id})]
+        elif capability == "window.observe":
+            params["include_screenshot"] = False
+            specs = [VerificationSpec(kind="window.exists", parameters=verify_target)]
+        elif capability == "ui.set_value":
+            executor = self.gateway.resolve(capability)
+            if not hasattr(executor, "stash_value"):
+                raise RuntimeError("authorized desktop executor is unavailable")
+            assert value is not None
+            params["value_ref"] = executor.stash_value(value)
+            params["value_sha256"] = hashlib.sha256(value.encode()).hexdigest()
+            specs = [VerificationSpec(kind="ui.element_value_sha256", parameters={
+                **verify_target, "label": element_name, "role": element_role, "sha256": params["value_sha256"],
+            })]
+        elif verify_element_name:
+            specs = [VerificationSpec(kind="ui.element_exists", parameters={**verify_target, "label": verify_element_name})]
+        else:
+            specs = [VerificationSpec(kind="window.exists", parameters={"bundle_id": bundle_id, "window_title": verify_window_title})]
+        action = ActionIntent(
+            task_id=task_id,
+            node_id="desktop-action",
+            capability=capability,
+            target=target,
+            parameters=params,
+            expected_result=f"{capability} verified in {bundle_id}",
+            verification=specs,
+            resource_scope=[ResourceScope(kind="application", value=bundle_id)],
+            risk=RiskLevel.LOW,
+        )
+        graph = TaskGraph.from_nodes(task_id, [TaskNode(
+            node_id="desktop-action", title=capability.replace(".", " "), action=action,
+            resource_requirements={"desktop:session"}, max_attempts=1,
+        )])
+        contract = GoalContract(objective=f"{capability} in {bundle_id}")
+        self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
+        self.store.append("PlanCreated", {"nodes": ["desktop-action"]}, task_id=task_id)
+        session = TaskSession(task_id=task_id, contract=contract, project_root=self.data_dir or Path.cwd(), graph=graph, diagnosis={"summary": "Desktop action"})
+        self.sessions[task_id] = session
+        self._persist(session)
+        await self.run(task_id)
+        return session
+
+    async def create_browser_task(
+        self,
+        *,
+        capability: str,
+        url: str,
+        selector: str | None = None,
+        role: str | None = None,
+        name: str | None = None,
+        value: str | None = None,
+        path: str | None = None,
+        expected_url: str | None = None,
+        expected_title: str | None = None,
+        expected_text: str | None = None,
+    ) -> TaskSession:
+        if self.browser is None or not self.browser.status()["available"] or self.data_dir is None:
+            raise RuntimeError("browser is not configured or Playwright is unavailable")
+        self.browser.require_origin(url)
+        if expected_url:
+            self.browser.require_origin(expected_url)
+        if capability not in self.browser.CAPABILITIES:
+            raise ValueError("unsupported browser capability")
+        if capability != "browser.navigate" and not (selector or name):
+            raise ValueError("browser action requires a semantic target or selector")
+        if capability == "browser.click" and not (expected_url or expected_title or expected_text):
+            raise ValueError("browser.click requires a verifiable postcondition")
+        if capability == "browser.fill" and value is None:
+            raise ValueError("browser.fill requires a value")
+        if capability == "browser.upload" and not path:
+            raise ValueError("browser.upload requires a file path")
+        if capability == "browser.observe" and (selector or name):
+            raise ValueError("browser.observe inspects the current page, not an element")
+        task_id = f"task_{uuid4().hex[:16]}"
+        parameters: dict[str, Any] = {"url": url}
+        if selector:
+            parameters["selector"] = selector
+        if role:
+            parameters["role"] = role
+        if name:
+            parameters["name"] = name
+        specs: list[VerificationSpec] = []
+        scopes = [ResourceScope(kind="browser_origin", value=browser_origin(url))]
+        root = self.data_dir
+        if capability == "browser.navigate":
+            specs.append(VerificationSpec(kind="browser.url_equals", parameters={"url": expected_url or url}))
+            specs.append(VerificationSpec(kind="http.status", parameters={"min": 200, "max": 399}))
+        elif capability == "browser.observe":
+            specs.append(VerificationSpec(kind="browser.url_equals", parameters={"url": url}))
+        elif capability == "browser.fill":
+            assert value is not None
+            parameters["value_ref"] = self.browser.stash_value(value)
+            parameters["value_sha256"] = hashlib.sha256(value.encode()).hexdigest()
+            specs.append(VerificationSpec(kind="browser.value_sha256", parameters={"sha256": parameters["value_sha256"]}))
+        elif capability == "browser.download":
+            assert self.browser.download_dir is not None
+            scopes.append(ResourceScope(kind="filesystem", value=str(self.browser.download_dir), recursive=True))
+            specs.append(VerificationSpec(kind="browser.download_sha256"))
+            root = self.browser.download_dir
+        elif capability == "browser.upload":
+            upload = Path(str(path)).expanduser().resolve(strict=True)
+            if not upload.is_file():
+                raise ValueError("browser upload path must be a file")
+            parameters["path"] = str(upload)
+            scopes.append(ResourceScope(kind="filesystem", value=str(upload)))
+            specs.append(VerificationSpec(kind="browser.upload_selected"))
+            root = upload
+        if expected_url and capability != "browser.navigate":
+            specs.append(VerificationSpec(kind="browser.url_equals", parameters={"url": expected_url}))
+        if expected_title:
+            specs.append(VerificationSpec(kind="browser.title_equals", parameters={"title": expected_title}))
+        if expected_text:
+            specs.append(VerificationSpec(kind="browser.text_visible", parameters={"text": expected_text}))
+        action = ActionIntent(
+            task_id=task_id,
+            node_id="browser-action",
+            capability=capability,
+            target=ActionTarget(url=url, element_name=name),
+            parameters=parameters,
+            expected_result=f"{capability} verified at {url}",
+            verification=specs,
+            resource_scope=scopes,
+            risk=RiskLevel.OBSERVE if capability == "browser.observe" else RiskLevel.LOW,
+        )
+        graph = TaskGraph.from_nodes(task_id, [TaskNode(
+            node_id="browser-action", title=capability.replace("browser.", "Browser ").replace("_", " "),
+            action=action, resource_requirements={"browser:profile"}, max_attempts=1,
+        )])
+        contract = GoalContract(objective=f"{capability} at {url}")
+        self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
+        self.store.append("PlanCreated", {"nodes": ["browser-action"]}, task_id=task_id)
+        session = TaskSession(task_id=task_id, contract=contract, project_root=root, graph=graph, diagnosis={"summary": "Browser action"})
+        self.sessions[task_id] = session
+        self._persist(session)
+        await self.run(task_id)
+        return session
+
     async def run(self, task_id: str) -> TaskSession:
         session = self.sessions[task_id]
         async with session.lock:
@@ -163,6 +382,10 @@ class SystemAIRuntime:
             session.state = TaskState.RUNNING
             self._persist(session)
             while True:
+                if session.requested_control is not None:
+                    session.state = session.requested_control
+                    self._persist(session)
+                    return session
                 ready = session.graph.ready_nodes()
                 if not ready:
                     if session.graph.successful():
@@ -176,7 +399,11 @@ class SystemAIRuntime:
                     return session
                 node = sorted(ready, key=lambda x: x.node_id)[0]
                 outcome = await self._run_node(session, node)
+                if session.requested_control is not None:
+                    session.state = session.requested_control
                 self._persist(session)
+                if session.requested_control is not None:
+                    return session
                 if outcome in {"waiting", "paused"}:
                     return session
                 if outcome == "failed":
@@ -219,6 +446,8 @@ class SystemAIRuntime:
                     task_id=session.task_id,
                     executor_id=executor.name,
                     allowed_roots=(session.project_root,),
+                    allowed_browser_origins=tuple(self.browser.allowed_origins) if self.browser else (),
+                    allowed_applications=tuple(self.allowed_applications),
                     approval_id=approval_id,
                     autonomy_mode=session.autonomy_mode,
                 ),
@@ -288,6 +517,8 @@ class SystemAIRuntime:
 
     def approve(self, task_id: str, action_id: str, *, approved: bool, approved_by: str = "local-user", reason: str | None = None) -> str:
         session = self.sessions[task_id]
+        if session.state in {TaskState.CANCELLED, TaskState.USER_TAKEOVER}:
+            raise ValueError("task is no longer accepting approvals")
         approval_id = session.pending_approvals.get(action_id)
         if not approval_id:
             raise KeyError("action is not awaiting approval")
@@ -296,29 +527,41 @@ class SystemAIRuntime:
         node = next(n for n in session.graph.nodes.values() if n.action.action_id == action_id)
         if approved:
             node.state = StepState.PENDING
-            session.state = TaskState.READY
+            if session.state != TaskState.PAUSED:
+                session.state = TaskState.READY
         else:
             node.state = StepState.FAILED
             node.last_error = reason or "approval denied"
             session.state = TaskState.FAILED
             session.error = node.last_error
+            if self.browser and node.action.capability == "browser.fill":
+                self.browser.forget_value(str(node.action.parameters.get("value_ref", "")))
+            if node.action.capability == "ui.set_value":
+                executor = self.gateway.resolve(node.action.capability)
+                if hasattr(executor, "forget_value"):
+                    executor.forget_value(str(node.action.parameters.get("value_ref", "")))
         self._persist(session)
         return approval_id
 
     def pause(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        session.requested_control = TaskState.PAUSED
         session.state = TaskState.PAUSED
         self.store.append("TaskPaused", {}, task_id=task_id)
         self._persist(session)
 
     def take_control(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        self._forget_browser_values(session)
+        session.requested_control = TaskState.USER_TAKEOVER
         session.state = TaskState.USER_TAKEOVER
         self.store.append("UserTakeover", {}, task_id=task_id)
         self._persist(session)
 
     def cancel(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        self._forget_browser_values(session)
+        session.requested_control = TaskState.CANCELLED
         session.state = TaskState.CANCELLED
         self.store.append("TaskCancelled", {}, task_id=task_id)
         self._persist(session)
@@ -336,6 +579,7 @@ class SystemAIRuntime:
         for node in session.graph.nodes.values():
             if node.state == StepState.WAITING_FOR_RESOURCE:
                 node.state = StepState.PENDING
+        session.requested_control = None
         if self._has_undecided_approvals(session):
             session.state = TaskState.WAITING_FOR_APPROVAL
             self._persist(session)
@@ -441,10 +685,23 @@ class SystemAIRuntime:
             for approval_id in session.pending_approvals.values()
         )
 
+    def _forget_browser_values(self, session: TaskSession) -> None:
+        if self.browser:
+            for node in session.graph.nodes.values():
+                if node.action.capability == "browser.fill":
+                    self.browser.forget_value(str(node.action.parameters.get("value_ref", "")))
+        for node in session.graph.nodes.values():
+            if node.action.capability == "ui.set_value":
+                executor = self.gateway.resolve(node.action.capability)
+                if hasattr(executor, "forget_value"):
+                    executor.forget_value(str(node.action.parameters.get("value_ref", "")))
+
     @staticmethod
     def _redacted_facts(facts: dict[str, Any]) -> dict[str, Any]:
-        # Facts are already designed not to contain secret env values; keep bounded logs out of top-level events.
+        # Logs and health bodies may contain secrets; keep them out of events, snapshots, and the API.
         out = dict(facts)
         if "logs" in out:
             out["logs"] = [{"path": x.get("path"), "size": x.get("size")} for x in out.get("logs", [])]
+        if isinstance(out.get("health"), dict):
+            out["health"] = {key: value for key, value in out["health"].items() if key != "body"}
         return out

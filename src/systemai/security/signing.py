@@ -51,7 +51,8 @@ class CapabilitySigner:
 
     @classmethod
     def load_or_create(cls, path: Path, *, key_id: str = "local-ed25519") -> "CapabilitySigner":
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.parent.chmod(0o700)
         if path.exists():
             try:
                 path.chmod(0o600)

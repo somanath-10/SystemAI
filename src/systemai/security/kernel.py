@@ -16,7 +16,8 @@ from systemai.contracts.models import (
 from systemai.core.capabilities import CapabilityRegistry
 from systemai.security.approvals import ApprovalStore
 from systemai.security.provenance import provenance_constraints_for, requires_provenance_approval
-from systemai.security.signing import CapabilitySigner
+from systemai.security.signing import CapabilitySigner, action_hash
+from systemai.security.origin import browser_origin
 
 
 _RISK_RANK = {
@@ -40,6 +41,8 @@ class SecurityContext:
     executor_id: str
     device_id: str = "local"
     allowed_roots: tuple[Path, ...] = ()
+    allowed_browser_origins: tuple[str, ...] = ()
+    allowed_applications: tuple[str, ...] = ()
     approval_id: str | None = None
     autonomy_mode: str = "assist"
 
@@ -95,18 +98,22 @@ class SecurityKernel:
             or action.requires_elevation
             or canonical_risk in {RiskLevel.HIGH, RiskLevel.CRITICAL}
             or requires_provenance_approval(action)
+            or action.capability in {"browser.click", "browser.fill", "browser.download", "browser.upload", "ui.click", "ui.set_value"}
             or (context.autonomy_mode == "assist" and canonical_risk not in {RiskLevel.OBSERVE, RiskLevel.LOW})
         )
 
         approval_id = context.approval_id
-        if approval_required and not (approval_id and self.approvals.is_approved(approval_id, action_id=action.action_id)):
-            if approval_id is None:
+        current_hash = action_hash(action)
+        if approval_required and not (approval_id and self.approvals.is_approved(approval_id, action_id=action.action_id, action_hash=current_hash)):
+            prior = self.approvals.get(approval_id) if approval_id else None
+            if prior is None or prior["action_id"] != action.action_id or prior["action_hash"] != current_hash:
                 approval_id = self.approvals.request(
                     action_id=action.action_id,
                     task_id=action.task_id,
                     requested_by=context.actor_id,
                     canonical_summary=self.canonical_summary(action, canonical_risk, canonical_reversible),
                     reason="Canonical policy requires user approval.",
+                    action_hash=current_hash,
                 )
             decision = PolicyDecision(
                 decision="require_approval",
@@ -173,6 +180,10 @@ class SecurityKernel:
         return None
 
     def _scope(self, action: ActionIntent, context: SecurityContext) -> list[ResourceScope] | None:
+        if action.capability.startswith(("application.", "window.", "ui.", "keyboard.", "screen.")) and action.capability != "application.list":
+            bundle_id = action.target.bundle_id if action.target else None
+            if not bundle_id or bundle_id.casefold() not in {item.casefold() for item in context.allowed_applications}:
+                return None
         paths = [Path(scope.value) for scope in action.resource_scope if scope.kind == "filesystem"]
         if action.target and action.target.path:
             paths.append(Path(action.target.path))
@@ -180,6 +191,12 @@ class SecurityKernel:
         if any(not self._path_allowed(path, context.allowed_roots) for path in paths):
             return None
         url = (action.target.url if action.target else None) or action.parameters.get("url")
+        if action.capability.startswith("browser.") and url:
+            try:
+                if browser_origin(str(url)) not in context.allowed_browser_origins:
+                    return None
+            except ValueError:
+                return None
         if action.capability == "http.health" and not self._local_health_url(url):
             return None
         if action.capability == "database.inspect" and str(action.parameters.get("host", "127.0.0.1")) not in {"127.0.0.1", "::1", "localhost"}:
@@ -197,6 +214,7 @@ class SecurityKernel:
             "process.start": ("cwd", "stdout_path", "stderr_path"),
             "sandbox.run": ("cwd",),
             "test.run": ("cwd",),
+            "browser.upload": ("path",),
         }.get(action.capability, ())
         return [Path(str(action.parameters[name])).expanduser() for name in names if action.parameters.get(name)]
 

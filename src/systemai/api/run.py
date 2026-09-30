@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import os
-
 import uvicorn
+
+from systemai.config import Settings
 
 
 def main() -> None:
-    host = os.environ.get("SYSTEMAI_API_HOST", "127.0.0.1")
-    port = int(os.environ.get("SYSTEMAI_API_PORT", "8765"))
-    uvicorn.run("systemai.api.local_server:app", host=host, port=port, reload=False)
+    settings = Settings()
+    if settings.api_host not in {"127.0.0.1", "::1", "localhost"}:
+        raise ValueError("SystemAI API must bind to loopback")
+    uvicorn.run("systemai.api.local_server:app", host=settings.api_host, port=settings.api_port, reload=False)
 
 
 if __name__ == "__main__":

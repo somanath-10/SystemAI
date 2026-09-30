@@ -115,7 +115,7 @@ Ed25519-signed claims bind exact action/executor/device/session/scope/parameters
 - `sandbox.run`
 - `test.run`
 
-Desktop/browser capabilities from V0.2 remain registered for forward compatibility but are not part of first release's production acceptance gate.
+Desktop/browser capabilities are registered. The V2 local task endpoints use them through policy, signed execution, and postcondition checks; native desktop release acceptance remains open.
 
 ## Local development HTTP API
 
@@ -126,6 +126,16 @@ Returns first release version and event-chain integrity.
 ### `GET /capabilities`
 
 Returns capability metadata.
+
+### V2 status and tasks
+
+- `GET /browser/status`: browser configuration, backend, and exact allowed origins.
+- `GET /desktop/status`: driver readiness, permissions, and allowed application IDs.
+- `POST /tasks/browser`: body includes `capability` (`browser.navigate`, `browser.observe`, `browser.click`, `browser.fill`, `browser.download`, or `browser.upload`) and an allowlisted `url`. Target actions also take a semantic `role`/`name` or `selector`; fill takes `value`, upload takes `path`, and click requires `expected_url`, `expected_title`, or `expected_text`.
+- `POST /tasks/desktop`: body includes `capability` (`application.launch`, `window.observe`, `ui.click`, or `ui.set_value`) and an allowlisted `bundle_id`. Window/UI actions require `window_title`; UI actions require `element_name` or `element_role`; click requires `verify_element_name` or `verify_window_title`.
+- `POST /tasks/desktop-observation`: signed, read-only running-application list.
+
+Mutation tasks can return `waiting_for_approval`; approve or deny the exact action through the ordinary approval endpoint. Fill values are ephemeral in memory and are not stored as plaintext in task snapshots or events.
 
 ### `POST /tasks/developer-diagnosis`
 
@@ -162,4 +172,4 @@ Body:
 
 ## Production IPC note
 
-This HTTP interface is for first release development and Command Center prototyping. Final privileged communication is expected to use authenticated Unix sockets on macOS/Linux and Windows named pipes on Windows.
+This loopback-only HTTP interface is for development and Command Center prototyping. It rejects untrusted browser origins and Host headers but is not an authenticated privilege boundary. Final privileged communication requires authenticated Unix sockets on macOS/Linux and named pipes on Windows.

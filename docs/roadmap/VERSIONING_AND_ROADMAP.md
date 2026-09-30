@@ -31,15 +31,17 @@ first release flagship goal:
 
 ## V2 — Real macOS Desktop + Browser
 
+In progress: signed desktop observation/launch/click/set-value actions and isolated Playwright browser navigation/observation/click/fill/download/upload are implemented with allowlists, approval gates, durable task records, and fresh postcondition checks. Browser actions have passed an installed-Chrome local fixture and Command Center navigation. Native desktop real-app validation, Rust authority over authenticated IPC, and release packaging remain open.
+
 - Production Rust kernel integration over authenticated local IPC.
 - Stable signed macOS application/driver identity.
 - Accessibility + Screen Recording onboarding.
-- Cua `ComputerExecutor` backend under SystemAI policy.
+- Cua `ComputerExecutor` backend under SystemAI policy (implemented, native acceptance pending).
 - Finder/TextEdit/Calculator/Chrome/VS Code validation.
 - desktop leases + takeover detection.
-- dedicated SystemAI browser profile.
-- Playwright/CDP session manager.
-- downloads/uploads/origin policy/Secret Broker integration.
+- dedicated SystemAI browser profile (implemented).
+- Playwright/CDP session manager (implemented for one local profile).
+- downloads/uploads/origin policy (implemented); Secret Broker integration remains open.
 - deterministic browser helper cache and repair-on-drift.
 - targeted screenshots/local CV/visual fallback.
 

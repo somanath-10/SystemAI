@@ -37,9 +37,11 @@ It is not an unrestricted desktop bot and it does not give an LLM a root/admin s
 - React/Tauri Command Center source.
 - Production Rust Security Kernel crate source plus a strict Python reference kernel used by local tests in environments without Rust.
 - Existing Cua/macOS V0.2 adapter code retained for V2 integration.
+- V2 browser actions (navigate, observe, click, fill, download, upload) through an isolated Chrome profile, exact origin allowlist, approval for mutations, signed execution, and fresh verification.
+- V2 desktop action pipeline (application launch, window observation, click, set value) through a Cua driver when installed and permissioned; fake-driver integration tests cover the signed path.
 
-## Later releases
-The release model for this repository intentionally breaks the broader product vision into testable versions. The following are later releases: real production macOS desktop automation through the new security kernel, production browser/CDP workflows, local VLM/OCR perception, model-cost routing, qualified skill compilation, monitoring/automations, voice, Windows/Linux production implementations and multi-device execution.
+## Release status
+The first release is complete for its declared developer-diagnosis scope. V2 is in progress: browser automation is implemented and exercised with installed Chrome; native desktop acceptance is blocked until the signed Cua driver is installed and the user grants macOS Accessibility/Screen Recording permissions. The Tauri shell is not yet wired to authenticated local IPC, and the Rust kernel is not yet the authority used by the Python runtime. Do not treat this source checkout as a production desktop release. Later releases include local VLM/OCR perception, model-cost routing, qualified skill compilation, monitoring/automations, voice, Windows/Linux production implementations and multi-device execution.
 
 The full product-level completion criteria from the master blueprint remain preserved in `docs/source/SystemAI_MASTER_BLUEPRINT_UPDATED.md`.
 
@@ -102,6 +104,7 @@ systemai-api
 ```
 
 Default development API: `127.0.0.1:8765`.
+Command Center development UI: `http://127.0.0.1:5802/`.
 
 Important: HTTP is a development/debug interface in source. The production architecture uses authenticated local IPC (Unix-domain socket on macOS/Linux, named pipe on Windows).
 

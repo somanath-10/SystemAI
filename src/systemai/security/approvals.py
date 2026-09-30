@@ -38,18 +38,21 @@ class ApprovalStore:
                     approved_by TEXT,
                     reason TEXT,
                     canonical_summary TEXT NOT NULL,
+                    action_hash TEXT,
                     created_at TEXT NOT NULL,
                     decided_at TEXT
                 )
                 """
             )
+            if "action_hash" not in {row[1] for row in c.execute("PRAGMA table_info(approvals)")}:
+                c.execute("ALTER TABLE approvals ADD COLUMN action_hash TEXT")
 
-    def request(self, *, action_id: str, task_id: str, requested_by: str, canonical_summary: str, reason: str) -> str:
+    def request(self, *, action_id: str, task_id: str, requested_by: str, canonical_summary: str, reason: str, action_hash: str | None = None) -> str:
         approval_id = f"approval_{uuid4().hex[:16]}"
         with self._connect() as c:
             c.execute(
-                "INSERT INTO approvals VALUES (?,?,?,?,NULL,NULL,?,?,?,NULL)",
-                (approval_id, action_id, task_id, requested_by, reason, canonical_summary, _now()),
+                "INSERT INTO approvals(approval_id,action_id,task_id,requested_by,approved,approved_by,reason,canonical_summary,action_hash,created_at,decided_at) VALUES (?,?,?,?,NULL,NULL,?,?,?,?,NULL)",
+                (approval_id, action_id, task_id, requested_by, reason, canonical_summary, action_hash, _now()),
             )
         return approval_id
 
@@ -66,12 +69,12 @@ class ApprovalStore:
                 (1 if approved else 0, approved_by, reason, _now(), approval_id),
             )
 
-    def is_approved(self, approval_id: str, *, action_id: str) -> bool:
+    def is_approved(self, approval_id: str, *, action_id: str, action_hash: str) -> bool:
         with self._connect() as c:
             row = c.execute(
-                "SELECT approved, action_id FROM approvals WHERE approval_id=?", (approval_id,)
+                "SELECT approved, action_id, action_hash FROM approvals WHERE approval_id=?", (approval_id,)
             ).fetchone()
-        return bool(row and row["action_id"] == action_id and row["approved"] == 1)
+        return bool(row and row["action_id"] == action_id and row["action_hash"] == action_hash and row["approved"] == 1)
 
     def get(self, approval_id: str) -> dict | None:
         with self._connect() as c:

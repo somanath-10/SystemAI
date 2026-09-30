@@ -10,4 +10,5 @@ __pycache__/
 node_modules/
 dist/
 target/
+apps/desktop/src-tauri/gen/
 .DS_Store

@@ -34,6 +34,8 @@ class DesktopControlService:
     async def list_apps(self) -> list[DesktopApplication]:
         raw = await self.client.call_tool("list_apps", {})
         payload = _unwrap(raw)
+        if not any(key in payload for key in ("apps", "applications", "items")):
+            raise ValueError("desktop driver did not return an application list")
         rows = payload.get("apps") or payload.get("applications") or payload.get("items") or []
         result: list[DesktopApplication] = []
         for item in rows:
