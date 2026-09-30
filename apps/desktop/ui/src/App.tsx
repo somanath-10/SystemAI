@@ -166,7 +166,6 @@ export default function App() {
     <main className="shell">
       <header className="topbar">
         <div className="brand"><span className="brand-symbol" aria-hidden="true">✦</span><span>SystemAI</span></div>
-        <span className="local-status"><span className="status-dot" />LOCAL</span>
       </header>
 
       <section className="scene" aria-label="SystemAI workspace">
@@ -184,7 +183,6 @@ export default function App() {
           </button>
         </div>
         <div className="scene-actions">
-          <span className="scene-state"><span className="status-dot" />{task ? stateLabel[task.state] ?? task.state.replaceAll("_", " ") : "Ready"}</span>
           <button className="launch-button" onClick={() => openComposer()}>New task <span aria-hidden="true">↗</span></button>
         </div>
       </section>
