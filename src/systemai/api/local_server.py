@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from systemai.config import Settings
 from systemai.desktop import DesktopToolClient
+from systemai.intelligence import RoutingRequest
 from systemai.runtime import VERSION, build_runtime
 
 
@@ -56,8 +57,10 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
+            await runtime.start_monitoring()
             yield
         finally:
+            await runtime.stop_monitoring()
             if runtime.browser:
                 await runtime.browser.close()
 
@@ -103,6 +106,10 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
     async def browser_status() -> dict:
         return runtime.browser.status() if runtime.browser else {"configured": False, "available": False, "backend": "none"}
 
+    @app.get("/monitor/status")
+    async def monitor_status() -> dict:
+        return runtime.monitoring_status()
+
     @app.post("/tasks/browser")
     async def browser_task(req: BrowserTaskRequest) -> dict:
         try:
@@ -144,6 +151,24 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
         if task_id not in runtime.sessions:
             raise HTTPException(status_code=404, detail="task not found in this process")
         return runtime.sessions[task_id].snapshot()
+
+    @app.get("/tasks/{task_id}/cost")
+    async def task_cost(task_id: str) -> dict:
+        try:
+            return runtime.cost_summary(task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="task not found") from exc
+
+    @app.post("/tasks/{task_id}/inference/route")
+    async def route_inference(task_id: str, request: RoutingRequest) -> dict:
+        if request.task_id != task_id:
+            raise HTTPException(status_code=400, detail="routing task_id does not match path")
+        try:
+            return runtime.route_inference(request).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="task not found") from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/tasks/{task_id}/approval")
     async def approve(task_id: str, body: ApprovalBody) -> dict:

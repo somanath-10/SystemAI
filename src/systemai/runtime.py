@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from systemai.config import Settings
+from systemai.cost import CostController
 from systemai.core.capabilities import default_capabilities
 from systemai.desktop import DesktopControlService, DesktopToolClient
 from systemai.execution import DiagnosticExecutor, FileSystemExecutor, HttpExecutor, PlaywrightExecutor, ProcessExecutor, SandboxExecutor
@@ -11,6 +12,7 @@ from systemai.execution.authorized_cua import AuthorizedCuaExecutor
 from systemai.execution.base import ExecutionGateway
 from systemai.execution.cua_cli import CuaCLIClient, CuaCLIConfig
 from systemai.orchestration import ActionJournal, EventStore, ResourceLeaseManager, SystemAIRuntime
+from systemai.monitoring import EventBus, ProcessMonitor
 from systemai.planner import DeveloperDiagnosisPlanner
 from systemai.security import ApprovalStore, CapabilitySigner, CapabilityVerifier, SecurityKernel
 from systemai.verification import PostconditionVerifier
@@ -31,6 +33,13 @@ def build_runtime(
     data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     data_dir.chmod(0o700)
     store = EventStore(data_dir / "systemai.sqlite3")
+    event_bus = EventBus()
+
+    async def persist_monitor_event(event) -> None:
+        store.append("MonitorEvent", {"event_type": event.event_type, "source": event.source, "payload": event.payload})
+
+    event_bus.subscribe("*", persist_monitor_event)
+    process_monitor = ProcessMonitor(event_bus, interval_seconds=settings.process_monitor_interval_seconds) if settings.enable_process_monitor else None
     approvals = ApprovalStore(data_dir / "systemai.sqlite3")
     signer = CapabilitySigner.load_or_create(data_dir / "keys" / "capability-ed25519.pem")
     registry = default_capabilities()
@@ -89,6 +98,8 @@ def build_runtime(
         store=store,
         journal=ActionJournal(store),
         leases=ResourceLeaseManager(store),
+        cost=CostController(store=store),
+        process_monitor=process_monitor,
         autonomy_mode=autonomy_mode or settings.autonomy_mode,
     )
     runtime.restore_sessions()

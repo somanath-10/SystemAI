@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from systemai.orchestration.event_store import EventStore
 
 
 ProviderKind = Literal[
@@ -35,6 +39,7 @@ class CostBudget(BaseModel):
 
 
 class UsageRecord(BaseModel):
+    call_id: str = Field(default_factory=lambda: f"model_{uuid4().hex[:16]}")
     task_id: str
     provider: str
     model: str | None = None
@@ -44,6 +49,7 @@ class UsageRecord(BaseModel):
     image_count: int = 0
     audio_seconds: float = 0.0
     estimated_cost_usd: float = 0.0
+    latency_ms: float = 0.0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = Field(default_factory=dict)
 
@@ -71,7 +77,8 @@ class CostController:
 
     EXTERNAL_KINDS = {"specialist_api", "standard_api", "premium_api"}
 
-    def __init__(self) -> None:
+    def __init__(self, store: "EventStore | None" = None) -> None:
+        self.store = store
         self._budgets: dict[str, CostBudget] = {}
         self._records: list[UsageRecord] = []
         self._lock = Lock()
@@ -85,12 +92,21 @@ class CostController:
             return self._budgets.get(task_id, CostBudget())
 
     def records_for(self, task_id: str) -> list[UsageRecord]:
+        if self.store is not None:
+            return [
+                UsageRecord.model_validate({
+                    **record,
+                    "model": record["model"] or None,
+                    "image_count": record.pop("images"),
+                    "created_at": record["created_at"],
+                })
+                for record in self.store.model_calls_for(task_id)
+            ]
         with self._lock:
             return [record.model_copy(deep=True) for record in self._records if record.task_id == task_id]
 
     def totals_for(self, task_id: str) -> UsageTotals:
-        with self._lock:
-            records = [r for r in self._records if r.task_id == task_id]
+        records = self.records_for(task_id)
         totals = UsageTotals()
         for record in records:
             if record.kind in self.EXTERNAL_KINDS:
@@ -136,5 +152,13 @@ class CostController:
                 vision=record.image_count > 0,
                 audio_seconds=record.audio_seconds,
             )
+        if self.store is not None:
+            self.store.record_model_call(record.model_dump(mode="json"))
+            self.store.append(
+                "ModelUsageRecorded",
+                {"provider": record.provider, "model": record.model, "kind": record.kind, "estimated_cost_usd": record.estimated_cost_usd},
+                task_id=record.task_id,
+            )
+            return
         with self._lock:
             self._records.append(record)

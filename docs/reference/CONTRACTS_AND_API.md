@@ -137,6 +137,14 @@ Returns capability metadata.
 
 Mutation tasks can return `waiting_for_approval`; approve or deny the exact action through the ordinary approval endpoint. Fill values are ephemeral in memory and are not stored as plaintext in task snapshots or events.
 
+### V3 cost routing and monitoring
+
+- `GET /monitor/status`: reports whether the opt-in process monitor is configured and running.
+- `GET /tasks/{task_id}/cost`: returns the task's cloud budget, durable usage records, and calculated totals.
+- `POST /tasks/{task_id}/inference/route`: accepts a `RoutingRequest` with the matching task ID and returns the least-cost permitted inference tier. It records a routing decision but never invokes a provider by itself.
+
+Set `SYSTEMAI_ENABLE_PROCESS_MONITOR=true` to record process start/exit events. The monitor stays off by default.
+
 ### `POST /tasks/developer-diagnosis`
 
 Body:

@@ -47,6 +47,8 @@ In progress: signed desktop observation/launch/click/set-value actions and isola
 
 ## V3 — Cost Intelligence + Learning + Monitoring
 
+Started: the active runtime now persists model-usage records, applies each task's cloud budget to local-first routing decisions, and exposes cost/routing API projections. Provider adapters, qualified skills, and durable monitors remain next.
+
 - evaluation-calibrated ModelRouter.
 - local LLM/VLM providers.
 - ConfidenceEngine based on evidence, not model self-confidence.

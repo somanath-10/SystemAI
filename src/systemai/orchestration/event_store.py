@@ -119,12 +119,14 @@ class EventStore:
                     task_id TEXT,
                     provider TEXT NOT NULL,
                     model TEXT NOT NULL,
+                    kind TEXT NOT NULL DEFAULT 'local_small',
                     input_tokens INTEGER DEFAULT 0,
                     output_tokens INTEGER DEFAULT 0,
                     images INTEGER DEFAULT 0,
                     audio_seconds REAL DEFAULT 0,
                     estimated_cost_usd REAL DEFAULT 0,
                     latency_ms REAL DEFAULT 0,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS artifacts(
@@ -142,6 +144,11 @@ class EventStore:
                 );
                 """
             )
+            columns = {row[1] for row in c.execute("PRAGMA table_info(model_calls)")}
+            if "kind" not in columns:
+                c.execute("ALTER TABLE model_calls ADD COLUMN kind TEXT NOT NULL DEFAULT 'local_small'")
+            if "metadata_json" not in columns:
+                c.execute("ALTER TABLE model_calls ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
 
     def append(
         self,
@@ -275,3 +282,25 @@ class EventStore:
             return True
         except sqlite3.IntegrityError:
             return False
+
+    def record_model_call(self, record: dict[str, Any]) -> None:
+        with self.connect() as c:
+            c.execute(
+                """
+                INSERT INTO model_calls(
+                    call_id,task_id,provider,model,kind,input_tokens,output_tokens,
+                    images,audio_seconds,estimated_cost_usd,latency_ms,metadata_json,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    record["call_id"], record["task_id"], record["provider"], record["model"] or "",
+                    record["kind"], record["input_tokens"], record["output_tokens"], record["image_count"],
+                    record["audio_seconds"], record["estimated_cost_usd"], record.get("latency_ms", 0.0),
+                    _canonical(record.get("metadata", {})), record["created_at"],
+                ),
+            )
+
+    def model_calls_for(self, task_id: str) -> list[dict[str, Any]]:
+        with self.connect() as c:
+            rows = c.execute("SELECT * FROM model_calls WHERE task_id=? ORDER BY created_at,call_id", (task_id,)).fetchall()
+        return [dict(row) | {"metadata": json.loads(row["metadata_json"])} for row in rows]

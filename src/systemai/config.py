@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     browser_profile_dir: Path | None = None
     browser_download_dir: Path | None = None
     enable_process_monitor: bool = False
+    process_monitor_interval_seconds: float = Field(default=2.0, gt=0)
     enable_desktop: bool = False
     desktop_backend: str = "cua-cli"
     desktop_allowed_apps: str = "com.apple.finder,com.apple.TextEdit,com.apple.calculator,com.google.Chrome,com.microsoft.VSCode"

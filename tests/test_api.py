@@ -47,3 +47,23 @@ def test_browser_api_rejects_unlisted_origin_without_task(tmp_path: Path) -> Non
     response = client.post("/tasks/browser", json={"capability": "browser.navigate", "url": "https://example.com/"})
     assert response.status_code == 400
     assert client.app.state.runtime.sessions == {}
+
+
+def test_cost_and_routing_api_for_an_existing_task(tmp_path: Path) -> None:
+    client = TestClient(create_app(tmp_path / "data"), base_url="http://127.0.0.1:8765")
+    project = tmp_path / "project"
+    project.mkdir()
+    created = client.post("/tasks/developer-diagnosis", json={"project_root": str(project)}).json()
+    task_id = created["task_id"]
+
+    cost = client.get(f"/tasks/{task_id}/cost")
+    assert cost.status_code == 200
+    assert cost.json()["totals"]["external_calls"] == 0
+
+    routed = client.post(f"/tasks/{task_id}/inference/route", json={
+        "task_id": task_id,
+        "purpose": "classify a local diagnosis",
+        "complexity": 0.1,
+    })
+    assert routed.status_code == 200
+    assert routed.json()["tier"] == "local_small"

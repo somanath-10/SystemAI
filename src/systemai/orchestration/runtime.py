@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import suppress
 import hashlib
 import json
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,9 +25,12 @@ from systemai.contracts.models import (
     VerificationSpec,
     VerificationStatus,
 )
+from systemai.cost import CostBudget, CostController
 from systemai.core.task_graph import TaskGraph, TaskNode
 from systemai.desktop import DesktopControlService
 from systemai.execution.browser import PlaywrightExecutor, file_sha256
+from systemai.intelligence import LocalFirstModelRouter, RoutingDecision, RoutingRequest
+from systemai.monitoring import ProcessMonitor
 from systemai.security.origin import browser_origin
 from systemai.execution.base import ExecutionGateway
 from systemai.orchestration.action_journal import ActionJournal
@@ -115,6 +120,8 @@ class SystemAIRuntime:
         store: EventStore,
         journal: ActionJournal,
         leases: ResourceLeaseManager,
+        cost: CostController | None = None,
+        process_monitor: ProcessMonitor | None = None,
         autonomy_mode: str = "standard_auto",
     ) -> None:
         self.planner = planner
@@ -128,6 +135,10 @@ class SystemAIRuntime:
         self.store = store
         self.journal = journal
         self.leases = leases
+        self.cost = cost or CostController(store=store)
+        self.model_router = LocalFirstModelRouter(self.cost)
+        self.process_monitor = process_monitor
+        self._monitor_task: asyncio.Task | None = None
         self.autonomy_mode = autonomy_mode
         self.sessions: dict[str, TaskSession] = {}
 
@@ -145,6 +156,7 @@ class SystemAIRuntime:
             raise ValueError(f"unsupported autonomy mode: {autonomy_mode}")
         task_id = f"task_{uuid4().hex[:16]}"
         contract = self.planner.goal_contract(goal, project_root, actor_id=actor_id)
+        self._set_cost_budget(task_id, contract)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         graph, report = await asyncio.to_thread(self.planner.plan, task_id=task_id, contract=contract, project_root=project_root)
         diagnosis = report.model_dump(mode="json")
@@ -174,6 +186,43 @@ class SystemAIRuntime:
         await self.run(task_id)
         return session
 
+    def route_inference(self, request: RoutingRequest) -> RoutingDecision:
+        if request.task_id not in self.sessions:
+            raise KeyError(request.task_id)
+        decision = self.model_router.route(request)
+        self.store.append(
+            "InferenceRouted",
+            {"tier": decision.tier.value, "external": decision.external, "reason": decision.reason},
+            task_id=request.task_id,
+        )
+        return decision
+
+    def cost_summary(self, task_id: str) -> dict[str, Any]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        return {
+            "budget": self.cost.budget_for(task_id).model_dump(mode="json"),
+            "totals": asdict(self.cost.totals_for(task_id)),
+            "records": [record.model_dump(mode="json") for record in self.cost.records_for(task_id)],
+        }
+
+    async def start_monitoring(self) -> None:
+        if self.process_monitor is not None and (self._monitor_task is None or self._monitor_task.done()):
+            self._monitor_task = asyncio.create_task(self.process_monitor.run())
+
+    async def stop_monitoring(self) -> None:
+        if self.process_monitor is None:
+            return
+        self.process_monitor.stop()
+        if self._monitor_task is not None:
+            self._monitor_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._monitor_task
+            self._monitor_task = None
+
+    def monitoring_status(self) -> dict[str, Any]:
+        return {"configured": self.process_monitor is not None, "running": bool(self._monitor_task and not self._monitor_task.done())}
+
     async def create_desktop_observation(self) -> TaskSession:
         if self.desktop is None:
             raise RuntimeError("desktop driver is unavailable")
@@ -182,6 +231,7 @@ class SystemAIRuntime:
             raise RuntimeError("desktop driver is unavailable")
         task_id = f"task_{uuid4().hex[:16]}"
         contract = GoalContract(objective="Inspect running desktop applications")
+        self._set_cost_budget(task_id, contract)
         action = ActionIntent(
             task_id=task_id,
             node_id="observe-apps",
@@ -271,6 +321,7 @@ class SystemAIRuntime:
             resource_requirements={"desktop:session"}, max_attempts=1,
         )])
         contract = GoalContract(objective=f"{capability} in {bundle_id}")
+        self._set_cost_budget(task_id, contract)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         self.store.append("PlanCreated", {"nodes": ["desktop-action"]}, task_id=task_id)
         session = TaskSession(task_id=task_id, contract=contract, project_root=self.data_dir or Path.cwd(), graph=graph, diagnosis={"summary": "Desktop action"})
@@ -367,6 +418,7 @@ class SystemAIRuntime:
             action=action, resource_requirements={"browser:profile"}, max_attempts=1,
         )])
         contract = GoalContract(objective=f"{capability} at {url}")
+        self._set_cost_budget(task_id, contract)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         self.store.append("PlanCreated", {"nodes": ["browser-action"]}, task_id=task_id)
         session = TaskSession(task_id=task_id, contract=contract, project_root=root, graph=graph, diagnosis={"summary": "Browser action"})
@@ -623,6 +675,7 @@ class SystemAIRuntime:
                     pending_approvals=dict(snapshot.get("pending_approvals", {})),
                     error=snapshot.get("error"),
                 )
+                self._set_cost_budget(session.task_id, session.contract)
                 for step in snapshot["steps"]:
                     action_id = step["action"]["action_id"]
                     if step.get("result"):
@@ -679,6 +732,16 @@ class SystemAIRuntime:
         for node in session.graph.nodes.values():
             self.store.upsert_node(session.task_id, node.node_id, node.state.value, {"title": node.title, "action": node.action.model_dump(mode="json"), "dependencies": sorted(node.dependencies), "resources": sorted(node.resource_requirements), "attempts": node.attempts, "last_error": node.last_error})
         self.store.replace_edges(session.task_id, session.graph.edges())
+
+    def _set_cost_budget(self, task_id: str, contract: GoalContract) -> None:
+        profile = contract.budget_profile
+        self.cost.set_budget(task_id, CostBudget(
+            max_external_cost_usd=profile.max_cloud_spend_usd,
+            max_external_calls=profile.max_cloud_calls,
+            max_external_vision_calls=profile.max_image_calls,
+            max_external_audio_seconds=profile.max_audio_seconds,
+            prefer_local=contract.privacy_profile != "cloud-first",
+        ))
 
     def _has_undecided_approvals(self, session: TaskSession) -> bool:
         return any(
