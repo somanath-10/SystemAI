@@ -99,7 +99,9 @@ class PostconditionVerifier:
                 assert self.browser is not None
                 names = await self.browser._locator(action).evaluate("el => Array.from(el.files || []).map(file => file.name)")
                 expected = Path(str(action.parameters["path"])).name
-                return {"kind": kind, "passed": names == [expected], "file_names": names}
+                expected_hash = str(action.parameters["sha256"])
+                actual_hash = str(result.output.get("sha256", ""))
+                return {"kind": kind, "passed": names == [expected] and actual_hash == expected_hash, "file_names": names, "sha256": actual_hash}
             if kind == "desktop.apps_observed":
                 if self.desktop is None:
                     return {"kind": kind, "passed": False, "error": "desktop verifier unavailable"}

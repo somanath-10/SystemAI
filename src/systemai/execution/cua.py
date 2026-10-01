@@ -377,7 +377,7 @@ class CuaDesktopExecutor(Executor):
         elif target.window_title:
             windows = [
                 w for w in windows
-                if w.title and target.window_title.casefold() in w.title.casefold()
+                if w.title and target.window_title.casefold() == w.title.casefold()
             ]
         if len(windows) != 1:
             raise CuaDriverError(

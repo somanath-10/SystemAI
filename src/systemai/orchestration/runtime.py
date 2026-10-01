@@ -25,7 +25,7 @@ from systemai.contracts.models import (
 )
 from systemai.core.task_graph import TaskGraph, TaskNode
 from systemai.desktop import DesktopControlService
-from systemai.execution.browser import PlaywrightExecutor
+from systemai.execution.browser import PlaywrightExecutor, file_sha256
 from systemai.security.origin import browser_origin
 from systemai.execution.base import ExecutionGateway
 from systemai.orchestration.action_journal import ActionJournal
@@ -300,7 +300,7 @@ class SystemAIRuntime:
             self.browser.require_origin(expected_url)
         if capability not in self.browser.CAPABILITIES:
             raise ValueError("unsupported browser capability")
-        if capability != "browser.navigate" and not (selector or name):
+        if capability not in {"browser.navigate", "browser.observe"} and not (selector or name):
             raise ValueError("browser action requires a semantic target or selector")
         if capability == "browser.click" and not (expected_url or expected_title or expected_text):
             raise ValueError("browser.click requires a verifiable postcondition")
@@ -338,9 +338,10 @@ class SystemAIRuntime:
             root = self.browser.download_dir
         elif capability == "browser.upload":
             upload = Path(str(path)).expanduser().resolve(strict=True)
-            if not upload.is_file():
-                raise ValueError("browser upload path must be a file")
+            if not upload.is_file() or upload.stat().st_size > 50_000_000:
+                raise ValueError("browser upload path must be a file no larger than 50 MB")
             parameters["path"] = str(upload)
+            parameters["sha256"] = file_sha256(upload)
             scopes.append(ResourceScope(kind="filesystem", value=str(upload)))
             specs.append(VerificationSpec(kind="browser.upload_selected"))
             root = upload

@@ -101,6 +101,28 @@ async def test_cua_executor_uses_exact_window_and_fresh_element_token():
 
 
 @pytest.mark.asyncio
+async def test_desktop_window_title_does_not_match_a_partial_title():
+    class SimilarTitleClient(FakeCuaClient):
+        async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            if name == "list_windows":
+                self.calls.append((name, arguments))
+                return {"windows": [{"pid": 42, "window_id": 7, "title": "Untitled Notes", "on_screen": True}]}
+            return await super().call_tool(name, arguments)
+
+    client = SimilarTitleClient()
+    desktop = DesktopControlService(client)
+    assert await desktop.find_window(pid=42, title="Untitled") is None
+    result = await CuaDesktopExecutor(client).execute(ActionIntent(
+        task_id="t1",
+        capability="ui.click",
+        target=ActionTarget(process_id=42, window_title="Untitled", element_token="s002:3"),
+        expected_result="Editor is clicked",
+    ))
+    assert result.status.value == "failed"
+    assert "window_target_not_found" in (result.error or "")
+
+
+@pytest.mark.asyncio
 async def test_cua_executor_rejects_bare_element_index():
     client = FakeCuaClient()
     executor = CuaDesktopExecutor(client)

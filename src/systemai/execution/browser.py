@@ -13,6 +13,14 @@ from systemai.security.ephemeral import EphemeralValues
 from systemai.security.origin import browser_origin
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 class PlaywrightExecutor(Executor):
     """Dedicated browser profile with an exact origin allowlist and semantic actions."""
 
@@ -158,10 +166,12 @@ class PlaywrightExecutor(Executor):
                     path = Path(str(action.parameters.get("path", ""))).expanduser().resolve(strict=True)
                     if not path.is_file() or path.stat().st_size > 50_000_000:
                         raise ValueError("browser upload must be a regular file no larger than 50 MB")
+                    if file_sha256(path) != action.parameters.get("sha256"):
+                        raise ValueError("browser upload file changed after approval")
                     if await locator.get_attribute("type") != "file":
                         raise ValueError("browser.upload requires a file input")
                     await locator.set_input_files(path)
-                    out = {"url": page.url, "file_name": path.name, "uploaded": True}
+                    out = {"url": page.url, "file_name": path.name, "sha256": action.parameters["sha256"], "uploaded": True}
                 else:
                     raise NotImplementedError(action.capability)
             return ActionResult(action_id=action.action_id, status=ActionStatus.COMPLETED, effect=EffectStatus.CONFIRMED,

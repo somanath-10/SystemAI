@@ -137,7 +137,7 @@ class DesktopControlService:
         for window in windows:
             if window_id is not None and str(window.window_id) == str(window_id):
                 return window
-            if title and window.title and title.casefold() in window.title.casefold():
+            if title and window.title and title.casefold() == window.title.casefold():
                 return window
         return None
 

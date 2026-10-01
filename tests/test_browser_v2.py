@@ -61,6 +61,8 @@ async def test_signed_browser_workflow_with_isolated_profile(tmp_path: Path) -> 
         page = await runtime.create_browser_task(capability="browser.navigate", url=origin + "/", expected_title="Safe Test")
         assert page.state.value == "completed", page.snapshot()
         assert (tmp_path / "profile").is_dir()
+        observe = await runtime.create_browser_task(capability="browser.observe", url=origin + "/")
+        assert observe.state.value == "completed", observe.snapshot()
         with pytest.raises(ValueError, match="allowlist"):
             await runtime.create_browser_task(capability="browser.navigate", url="https://example.com/")
 
@@ -98,6 +100,13 @@ async def test_signed_browser_workflow_with_isolated_profile(tmp_path: Path) -> 
         runtime.approve(upload.task_id, action_id, approved=True)
         await runtime.run(upload.task_id)
         assert upload.state.value == "completed", upload.snapshot()
+
+        changed = await runtime.create_browser_task(capability="browser.upload", url=origin + "/", selector="#upload", path=str(file_path))
+        file_path.write_text("changed after approval")
+        action_id = next(iter(changed.pending_approvals))
+        runtime.approve(changed.task_id, action_id, approved=True)
+        await runtime.run(changed.task_id)
+        assert changed.state.value == "failed", changed.snapshot()
         assert runtime.store.verify_chain()
     finally:
         if runtime.browser:
