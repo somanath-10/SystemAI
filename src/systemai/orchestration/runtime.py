@@ -30,6 +30,11 @@ from systemai.core.task_graph import TaskGraph, TaskNode
 from systemai.desktop import DesktopControlService
 from systemai.execution.browser import PlaywrightExecutor, file_sha256
 from systemai.intelligence import LocalFirstModelRouter, RoutingDecision, RoutingRequest
+from systemai.intelligence.confidence import evidence_confidence
+from systemai.intelligence.ollama import OllamaClient
+from systemai.intelligence.openai_responses import OpenAIResponsesClient
+from systemai.intelligence.openai_speech import OpenAISpeechClient
+from systemai.intelligence.openai_tools import OpenAIToolsClient
 from systemai.monitoring import ProcessMonitor
 from systemai.security.origin import browser_origin
 from systemai.execution.base import ExecutionGateway
@@ -38,6 +43,7 @@ from systemai.orchestration.event_store import EventStore
 from systemai.orchestration.leases import ResourceBusy, ResourceLeaseManager
 from systemai.planner.developer import DeveloperDiagnosisPlanner
 from systemai.security.kernel import SecurityContext, SecurityKernel
+from systemai.skills.registry import preview_candidate
 from systemai.verification.postcondition import PostconditionVerifier
 
 
@@ -60,6 +66,7 @@ class TaskSession:
     graph: TaskGraph
     diagnosis: dict[str, Any]
     autonomy_mode: str = "standard_auto"
+    parent_task_id: str | None = None
     state: TaskState = TaskState.READY
     results: dict[str, ActionResult] = field(default_factory=dict)
     verifications: dict[str, VerificationResult] = field(default_factory=dict)
@@ -74,6 +81,7 @@ class TaskSession:
             "goal": self.contract.model_dump(mode="json"),
             "project_root": str(self.project_root),
             "autonomy_mode": self.autonomy_mode,
+            "parent_task_id": self.parent_task_id,
             "state": self.state.value,
             "error": self.error,
             "diagnosis": self.diagnosis,
@@ -91,6 +99,7 @@ class TaskSession:
                     "action": n.action.model_dump(mode="json"),
                     "result": self.results.get(n.action.action_id).model_dump(mode="json") if n.action.action_id in self.results else None,
                     "verification": self.verifications.get(n.action.action_id).model_dump(mode="json") if n.action.action_id in self.verifications else None,
+                    "confidence": evidence_confidence(n.action, self.verifications.get(n.action.action_id)),
                 }
                 for n in self.graph.nodes.values()
             ],
@@ -122,6 +131,11 @@ class SystemAIRuntime:
         leases: ResourceLeaseManager,
         cost: CostController | None = None,
         process_monitor: ProcessMonitor | None = None,
+        local_models: OllamaClient | None = None,
+        openai: OpenAIResponsesClient | None = None,
+        speech: OpenAISpeechClient | None = None,
+        openai_tools: OpenAIToolsClient | None = None,
+        cloud_budget: CostBudget | None = None,
         autonomy_mode: str = "standard_auto",
     ) -> None:
         self.planner = planner
@@ -138,6 +152,12 @@ class SystemAIRuntime:
         self.cost = cost or CostController(store=store)
         self.model_router = LocalFirstModelRouter(self.cost)
         self.process_monitor = process_monitor
+        self.local_models = local_models
+        self.openai = openai
+        self.speech = speech
+        self.openai_tools = openai_tools
+        self.cloud_budget = cloud_budget or CostBudget(max_external_cost_usd=0, max_external_calls=0,
+                                                       max_external_vision_calls=0)
         self._monitor_task: asyncio.Task | None = None
         self.autonomy_mode = autonomy_mode
         self.sessions: dict[str, TaskSession] = {}
@@ -149,14 +169,16 @@ class SystemAIRuntime:
         *,
         actor_id: str = "local-user",
         autonomy_mode: str | None = None,
+        parent_task_id: str | None = None,
     ) -> TaskSession:
+        self._validate_parent(parent_task_id)
         project_root = Path(project_root).expanduser().resolve(strict=True)
         autonomy_mode = autonomy_mode or self.autonomy_mode
         if autonomy_mode not in {"observe", "assist", "standard_auto"}:
             raise ValueError(f"unsupported autonomy mode: {autonomy_mode}")
         task_id = f"task_{uuid4().hex[:16]}"
         contract = self.planner.goal_contract(goal, project_root, actor_id=actor_id)
-        self._set_cost_budget(task_id, contract)
+        self._set_cost_budget(task_id, contract, new=True)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         graph, report = await asyncio.to_thread(self.planner.plan, task_id=task_id, contract=contract, project_root=project_root)
         diagnosis = report.model_dump(mode="json")
@@ -170,6 +192,7 @@ class SystemAIRuntime:
             graph=graph,
             diagnosis=diagnosis,
             autonomy_mode=autonomy_mode,
+            parent_task_id=parent_task_id,
         )
         self.sessions[task_id] = session
         self._persist(session)
@@ -186,10 +209,20 @@ class SystemAIRuntime:
         await self.run(task_id)
         return session
 
-    def route_inference(self, request: RoutingRequest) -> RoutingDecision:
+    async def route_inference(self, request: RoutingRequest) -> RoutingDecision:
         if request.task_id not in self.sessions:
             raise KeyError(request.task_id)
-        decision = self.model_router.route(request)
+        status = await self.local_model_status()
+        models = status["models"]
+        available_request = request.model_copy(update={
+            "task_id": self.cost_task_id(request.task_id),
+            "local_small_available": models.get("local_small", False),
+            "local_llm_available": models.get("local_llm", False),
+            "local_vlm_available": models.get("local_vlm", False),
+            "external_available": bool(self.openai and self.openai.configured and request.modality.value != "audio"),
+            "specialist_api_available": False,
+        })
+        decision = self.model_router.route(available_request)
         self.store.append(
             "InferenceRouted",
             {"tier": decision.tier.value, "external": decision.external, "reason": decision.reason},
@@ -200,11 +233,116 @@ class SystemAIRuntime:
     def cost_summary(self, task_id: str) -> dict[str, Any]:
         if task_id not in self.sessions:
             raise KeyError(task_id)
+        cost_id = self.cost_task_id(task_id)
         return {
-            "budget": self.cost.budget_for(task_id).model_dump(mode="json"),
-            "totals": asdict(self.cost.totals_for(task_id)),
-            "records": [record.model_dump(mode="json") for record in self.cost.records_for(task_id)],
+            "cost_task_id": cost_id,
+            "budget": self.cost.budget_for(cost_id).model_dump(mode="json"),
+            "totals": asdict(self.cost.totals_for(cost_id)),
+            "records": [record.model_dump(mode="json") for record in self.cost.records_for(cost_id)],
         }
+
+    def _validate_parent(self, task_id: str | None) -> None:
+        if task_id is not None and task_id not in self.sessions:
+            raise ValueError("parent task does not exist")
+
+    def cost_task_id(self, task_id: str) -> str:
+        seen = set()
+        while True:
+            if task_id in seen or task_id not in self.sessions:
+                raise ValueError("task cost context is missing or cyclic")
+            seen.add(task_id)
+            parent = self.sessions[task_id].parent_task_id
+            if parent is None:
+                return task_id
+            task_id = parent
+
+    async def local_model_status(self) -> dict[str, Any]:
+        status = await self.local_models.status() if self.local_models else {"connected": False, "models": {}}
+        status["openai"] = self.openai.status() if self.openai else {"configured": False, "model": None}
+        status["speech"] = self.speech.status() if self.speech else {"stt": False, "tts": False}
+        status["tools"] = self.openai_tools.status() if self.openai_tools else {"web_search": False, "image_generation": False}
+        return status
+
+    def create_assistant_session(self) -> TaskSession:
+        task_id = f"task_{uuid4().hex[:16]}"
+        contract = GoalContract(objective="Voice assistant conversation")
+        self._set_cost_budget(task_id, contract, new=True)
+        session = TaskSession(task_id=task_id, contract=contract, project_root=self.data_dir or Path.cwd(),
+                              graph=TaskGraph(task_id), diagnosis={"summary": "Assistant session"}, state=TaskState.COMPLETED)
+        self.sessions[task_id] = session
+        self.store.append("AssistantSessionCreated", {}, task_id=task_id)
+        self._persist(session)
+        return session
+
+    async def generate_local(self, task_id: str, prompt: str, *, vision_image: bytes | None = None,
+                             small: bool = False, model_override: str | None = None) -> dict[str, Any]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        if self.local_models is None:
+            raise RuntimeError("local models are not configured")
+        kind = "local_vlm" if vision_image is not None else "local_small" if small else "local_llm"
+        result = await self.local_models.generate(task_id=self.cost_task_id(task_id), prompt=prompt, kind=kind, cost=self.cost,
+                                                  image=vision_image, model_override=model_override)
+        self.store.append("LocalInferenceCompleted", {"model": result.model, "kind": kind, "input_tokens": result.input_tokens, "output_tokens": result.output_tokens}, task_id=task_id)
+        return result.model_dump(mode="json")
+
+    async def generate_openai(self, task_id: str, prompt: str, *, vision_image: bytes | None = None) -> dict[str, Any]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        if self.openai is None:
+            raise RuntimeError("OpenAI is not configured")
+        result = await self.openai.generate(task_id=self.cost_task_id(task_id), prompt=prompt, image=vision_image, cost=self.cost)
+        self.store.append("ExternalInferenceCompleted", {"provider": "openai", "model": result.model,
+                                                          "input_tokens": result.input_tokens,
+                                                          "output_tokens": result.output_tokens}, task_id=task_id)
+        return result.model_dump(mode="json")
+
+    async def add_memory(self, task_id: str, content: str) -> dict[str, str]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        if self.local_models is None:
+            raise RuntimeError("local models are not configured")
+        embedding = await self.local_models.embed(task_id=self.cost_task_id(task_id), content=content, cost=self.cost)
+        note_id = self.store.add_semantic_note(task_id, content, embedding.digest, embedding.vector)
+        self.store.append("MemoryNoteCreated", {"note_id": note_id, "model": embedding.model}, task_id=task_id)
+        return {"note_id": note_id}
+
+    async def search_memory(self, task_id: str, query: str, limit: int = 5) -> dict[str, Any]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        if self.local_models is None:
+            raise RuntimeError("local models are not configured")
+        embedding = await self.local_models.embed(task_id=self.cost_task_id(task_id), content=query, cost=self.cost)
+        return {"items": self.store.search_semantic_notes(task_id, embedding.digest, embedding.vector, limit)}
+
+    def delete_memory(self, task_id: str, note_id: str) -> None:
+        if task_id not in self.sessions or not self.store.delete_semantic_note(task_id, note_id):
+            raise KeyError(note_id)
+        self.store.append("MemoryNoteDeleted", {"note_id": note_id}, task_id=task_id)
+
+    def skill_candidate(self, task_id: str) -> dict[str, Any]:
+        if task_id not in self.sessions:
+            raise KeyError(task_id)
+        candidate = preview_candidate(self.sessions[task_id].snapshot(), self.security_kernel.registry)
+        review = self.store.latest_skill_review(task_id)
+        candidate["review"] = review if review and review["candidate_hash"] == candidate["candidate_hash"] else None
+        return candidate
+
+    def review_skill_candidate(self, task_id: str, candidate_hash: str, decision: str) -> dict[str, Any]:
+        candidate = self.skill_candidate(task_id)
+        if candidate_hash != candidate["candidate_hash"]:
+            raise ValueError("candidate has changed; fetch the current preview")
+        if decision not in {"retain", "reject"}:
+            raise ValueError("unsupported review decision")
+        if decision == "retain" and candidate["status"] != "reviewable":
+            raise ValueError("blocked candidates cannot be retained")
+        event = self.store.append(
+            "SkillCandidateReviewRecorded",
+            {"candidate_hash": candidate_hash, "decision": decision, "non_authorizing": True},
+            task_id=task_id,
+        )
+        candidate["review"] = {**event["payload"], "recorded_at": event["created_at"]}
+        return candidate
 
     async def start_monitoring(self) -> None:
         if self.process_monitor is not None and (self._monitor_task is None or self._monitor_task.done()):
@@ -223,7 +361,8 @@ class SystemAIRuntime:
     def monitoring_status(self) -> dict[str, Any]:
         return {"configured": self.process_monitor is not None, "running": bool(self._monitor_task and not self._monitor_task.done())}
 
-    async def create_desktop_observation(self) -> TaskSession:
+    async def create_desktop_observation(self, *, parent_task_id: str | None = None) -> TaskSession:
+        self._validate_parent(parent_task_id)
         if self.desktop is None:
             raise RuntimeError("desktop driver is unavailable")
         status = await self.desktop.status()
@@ -231,7 +370,7 @@ class SystemAIRuntime:
             raise RuntimeError("desktop driver is unavailable")
         task_id = f"task_{uuid4().hex[:16]}"
         contract = GoalContract(objective="Inspect running desktop applications")
-        self._set_cost_budget(task_id, contract)
+        self._set_cost_budget(task_id, contract, new=True)
         action = ActionIntent(
             task_id=task_id,
             node_id="observe-apps",
@@ -243,7 +382,7 @@ class SystemAIRuntime:
         graph = TaskGraph.from_nodes(task_id, [TaskNode(node_id="observe-apps", title="Inspect applications", action=action, max_attempts=1)])
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         self.store.append("PlanCreated", {"nodes": ["observe-apps"]}, task_id=task_id)
-        session = TaskSession(task_id=task_id, contract=contract, project_root=Path.cwd(), graph=graph, diagnosis={"summary": "Desktop observation"})
+        session = TaskSession(task_id=task_id, contract=contract, project_root=Path.cwd(), graph=graph, diagnosis={"summary": "Desktop observation"}, parent_task_id=parent_task_id)
         self.sessions[task_id] = session
         self._persist(session)
         await self.run(task_id)
@@ -260,7 +399,9 @@ class SystemAIRuntime:
         value: str | None = None,
         verify_element_name: str | None = None,
         verify_window_title: str | None = None,
+        parent_task_id: str | None = None,
     ) -> TaskSession:
+        self._validate_parent(parent_task_id)
         if self.desktop is None:
             raise RuntimeError("desktop driver is unavailable")
         status = await self.desktop.status()
@@ -321,10 +462,10 @@ class SystemAIRuntime:
             resource_requirements={"desktop:session"}, max_attempts=1,
         )])
         contract = GoalContract(objective=f"{capability} in {bundle_id}")
-        self._set_cost_budget(task_id, contract)
+        self._set_cost_budget(task_id, contract, new=True)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         self.store.append("PlanCreated", {"nodes": ["desktop-action"]}, task_id=task_id)
-        session = TaskSession(task_id=task_id, contract=contract, project_root=self.data_dir or Path.cwd(), graph=graph, diagnosis={"summary": "Desktop action"})
+        session = TaskSession(task_id=task_id, contract=contract, project_root=self.data_dir or Path.cwd(), graph=graph, diagnosis={"summary": "Desktop action"}, parent_task_id=parent_task_id)
         self.sessions[task_id] = session
         self._persist(session)
         await self.run(task_id)
@@ -343,7 +484,9 @@ class SystemAIRuntime:
         expected_url: str | None = None,
         expected_title: str | None = None,
         expected_text: str | None = None,
+        parent_task_id: str | None = None,
     ) -> TaskSession:
+        self._validate_parent(parent_task_id)
         if self.browser is None or not self.browser.status()["available"] or self.data_dir is None:
             raise RuntimeError("browser is not configured or Playwright is unavailable")
         self.browser.require_origin(url)
@@ -418,10 +561,10 @@ class SystemAIRuntime:
             action=action, resource_requirements={"browser:profile"}, max_attempts=1,
         )])
         contract = GoalContract(objective=f"{capability} at {url}")
-        self._set_cost_budget(task_id, contract)
+        self._set_cost_budget(task_id, contract, new=True)
         self.store.append("GoalCreated", contract.model_dump(mode="json"), task_id=task_id)
         self.store.append("PlanCreated", {"nodes": ["browser-action"]}, task_id=task_id)
-        session = TaskSession(task_id=task_id, contract=contract, project_root=root, graph=graph, diagnosis={"summary": "Browser action"})
+        session = TaskSession(task_id=task_id, contract=contract, project_root=root, graph=graph, diagnosis={"summary": "Browser action"}, parent_task_id=parent_task_id)
         self.sessions[task_id] = session
         self._persist(session)
         await self.run(task_id)
@@ -482,8 +625,15 @@ class SystemAIRuntime:
             node.state = StepState.RUNNING
             node.attempts += 1
             journal_state = self.journal.get(action.action_id)
+            if journal_state and journal_state["status"] == ActionJournalStatus.EFFECT_OBSERVED.value:
+                result = ActionResult.model_validate(journal_state["result"])
+                session.results[action.action_id] = result
+                return await self._verify_result(session, node, result)
             if journal_state is None or journal_state.get("status") == ActionJournalStatus.FAILED.value:
                 self.journal.prepare(action)
+            elif journal_state["status"] == ActionJournalStatus.AUTHORIZED.value:
+                # A pre-dispatch restart requires a fresh token, never a stale authorization.
+                self.journal.transition(action, ActionJournalStatus.PREPARED, detail={"reason": "reauthorize before dispatch"})
             elif journal_state.get("status") == ActionJournalStatus.COMMIT_STATUS_UNKNOWN.value:
                 node.state = StepState.FAILED
                 node.last_error = "external side-effect commit status is unknown; reconcile before retry"
@@ -536,24 +686,28 @@ class SystemAIRuntime:
                 return await self._maybe_retry(session, node, "executor failed")
 
             self.journal.transition(action, ActionJournalStatus.EFFECT_OBSERVED, result=result)
-            node.state = StepState.VERIFYING
-            session.state = TaskState.VERIFYING
-            verification = await self.verifier.verify(action, result)
-            session.verifications[action.action_id] = verification
-            self.store.append("ObservationReceived", {"executor_output": result.output}, task_id=session.task_id, node_id=node.node_id, action_id=action.action_id)
-            self.store.append("VerificationPassed" if verification.status == VerificationStatus.PASSED else "VerificationFailed", verification.model_dump(mode="json"), task_id=session.task_id, node_id=node.node_id, action_id=action.action_id)
-            with self.store.connect() as c:
-                c.execute("INSERT OR REPLACE INTO verification_results(action_id,result_json,created_at) VALUES(?,?,datetime('now'))", (action.action_id, json.dumps(verification.model_dump(mode="json"), sort_keys=True)))
-            if verification.status == VerificationStatus.PASSED:
-                self.journal.transition(action, ActionJournalStatus.VERIFIED)
-                node.state = StepState.SUCCEEDED
-                session.state = TaskState.RUNNING
-                session.pending_approvals.pop(action.action_id, None)
-                return "succeeded"
-            self.journal.transition(action, ActionJournalStatus.FAILED, detail={"summary": verification.summary})
-            return await self._maybe_retry(session, node, verification.summary)
+            return await self._verify_result(session, node, result)
         finally:
             self.leases.release_many(leases)
+
+    async def _verify_result(self, session: TaskSession, node: TaskNode, result: ActionResult) -> str:
+        action = node.action
+        node.state = StepState.VERIFYING
+        session.state = TaskState.VERIFYING
+        verification = await self.verifier.verify(action, result)
+        session.verifications[action.action_id] = verification
+        self.store.append("ObservationReceived", {"executor_output": result.output}, task_id=session.task_id, node_id=node.node_id, action_id=action.action_id)
+        self.store.append("VerificationPassed" if verification.status == VerificationStatus.PASSED else "VerificationFailed", verification.model_dump(mode="json"), task_id=session.task_id, node_id=node.node_id, action_id=action.action_id)
+        with self.store.connect() as c:
+            c.execute("INSERT OR REPLACE INTO verification_results(action_id,result_json,created_at) VALUES(?,?,datetime('now'))", (action.action_id, json.dumps(verification.model_dump(mode="json"), sort_keys=True)))
+        if verification.status == VerificationStatus.PASSED:
+            self.journal.transition(action, ActionJournalStatus.VERIFIED)
+            node.state = StepState.SUCCEEDED
+            session.state = TaskState.RUNNING
+            session.pending_approvals.pop(action.action_id, None)
+            return "succeeded"
+        self.journal.transition(action, ActionJournalStatus.FAILED, detail={"summary": verification.summary})
+        return await self._maybe_retry(session, node, verification.summary)
 
     async def _maybe_retry(self, session: TaskSession, node: TaskNode, error: str) -> str:
         node.last_error = error
@@ -598,6 +752,7 @@ class SystemAIRuntime:
 
     def pause(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        self._require_controllable(session)
         session.requested_control = TaskState.PAUSED
         session.state = TaskState.PAUSED
         self.store.append("TaskPaused", {}, task_id=task_id)
@@ -605,6 +760,7 @@ class SystemAIRuntime:
 
     def take_control(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        self._require_controllable(session)
         self._forget_browser_values(session)
         session.requested_control = TaskState.USER_TAKEOVER
         session.state = TaskState.USER_TAKEOVER
@@ -613,11 +769,20 @@ class SystemAIRuntime:
 
     def cancel(self, task_id: str) -> None:
         session = self.sessions[task_id]
+        if session.state == TaskState.CANCELLED:
+            return
+        if session.state != TaskState.USER_TAKEOVER:
+            self._require_controllable(session)
         self._forget_browser_values(session)
         session.requested_control = TaskState.CANCELLED
         session.state = TaskState.CANCELLED
         self.store.append("TaskCancelled", {}, task_id=task_id)
         self._persist(session)
+
+    @staticmethod
+    def _require_controllable(session: TaskSession) -> None:
+        if session.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED, TaskState.USER_TAKEOVER}:
+            raise ValueError("task is no longer accepting execution controls")
 
     async def resume(self, task_id: str) -> TaskSession:
         session = self.sessions[task_id]
@@ -671,6 +836,7 @@ class SystemAIRuntime:
                     graph=graph,
                     diagnosis=snapshot["diagnosis"],
                     autonomy_mode=snapshot.get("autonomy_mode", self.autonomy_mode),
+                    parent_task_id=snapshot.get("parent_task_id"),
                     state=TaskState(snapshot["state"]),
                     pending_approvals=dict(snapshot.get("pending_approvals", {})),
                     error=snapshot.get("error"),
@@ -682,6 +848,16 @@ class SystemAIRuntime:
                         session.results[action_id] = ActionResult.model_validate(step["result"])
                     if step.get("verification"):
                         session.verifications[action_id] = VerificationResult.model_validate(step["verification"])
+                for node in graph.nodes.values():
+                    journal = self.journal.get(node.action.action_id)
+                    if journal and journal["status"] == ActionJournalStatus.VERIFIED.value:
+                        node.state = StepState.SUCCEEDED
+                        if journal.get("result"):
+                            session.results[node.action.action_id] = ActionResult.model_validate(journal["result"])
+                        with self.store.connect() as c:
+                            verified = c.execute("SELECT result_json FROM verification_results WHERE action_id=?", (node.action.action_id,)).fetchone()
+                        if verified:
+                            session.verifications[node.action.action_id] = VerificationResult.model_validate_json(verified["result_json"])
                 unsafe = [
                     node
                     for node in graph.nodes.values()
@@ -698,7 +874,11 @@ class SystemAIRuntime:
                     self._persist(session)
                 elif session.state in {TaskState.RUNNING, TaskState.VERIFYING, TaskState.RECOVERING, TaskState.REPLANNING, TaskState.WAITING_FOR_RESOURCE, TaskState.READY} or (session.state == TaskState.WAITING_FOR_APPROVAL and not self._has_undecided_approvals(session)):
                     for node in graph.nodes.values():
-                        if node.state == StepState.WAITING_FOR_RESOURCE:
+                        journal = self.journal.get(node.action.action_id)
+                        if node.state == StepState.WAITING_FOR_RESOURCE or (journal and journal["status"] in {
+                            ActionJournalStatus.PREPARED.value, ActionJournalStatus.AUTHORIZED.value,
+                            ActionJournalStatus.EFFECT_OBSERVED.value,
+                        }):
                             node.state = StepState.PENDING
                     session.state = TaskState.PAUSED
                     session.error = "task was interrupted; resume explicitly"
@@ -733,13 +913,23 @@ class SystemAIRuntime:
             self.store.upsert_node(session.task_id, node.node_id, node.state.value, {"title": node.title, "action": node.action.model_dump(mode="json"), "dependencies": sorted(node.dependencies), "resources": sorted(node.resource_requirements), "attempts": node.attempts, "last_error": node.last_error})
         self.store.replace_edges(session.task_id, session.graph.edges())
 
-    def _set_cost_budget(self, task_id: str, contract: GoalContract) -> None:
+    def _set_cost_budget(self, task_id: str, contract: GoalContract, *, new: bool = False) -> None:
         profile = contract.budget_profile
+        default = self.cloud_budget
+        if new:
+            profile.max_cloud_spend_usd = min(profile.max_cloud_spend_usd or default.max_external_cost_usd,
+                                              default.max_external_cost_usd)
+            profile.max_cloud_calls = min(profile.max_cloud_calls or default.max_external_calls,
+                                          default.max_external_calls)
+            profile.max_image_calls = min(profile.max_image_calls or default.max_external_vision_calls,
+                                          default.max_external_vision_calls)
+            profile.max_audio_seconds = int(min(profile.max_audio_seconds or default.max_external_audio_seconds,
+                                                default.max_external_audio_seconds))
         self.cost.set_budget(task_id, CostBudget(
-            max_external_cost_usd=profile.max_cloud_spend_usd,
-            max_external_calls=profile.max_cloud_calls,
-            max_external_vision_calls=profile.max_image_calls,
-            max_external_audio_seconds=profile.max_audio_seconds,
+            max_external_cost_usd=min(profile.max_cloud_spend_usd, default.max_external_cost_usd),
+            max_external_calls=min(profile.max_cloud_calls, default.max_external_calls),
+            max_external_vision_calls=min(profile.max_image_calls, default.max_external_vision_calls),
+            max_external_audio_seconds=min(profile.max_audio_seconds, default.max_external_audio_seconds),
             prefer_local=contract.privacy_profile != "cloud-first",
         ))
 

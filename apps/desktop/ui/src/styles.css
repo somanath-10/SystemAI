@@ -9,6 +9,11 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
+.workspace-tools .mode-tabs { flex-wrap: wrap; }
+.tool-list { display: grid; gap: 12px; padding: 0; list-style: none; }
+.tool-list li { display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #ffffff18; padding: 10px 0; }
+.tool-list small { color: #a7a1b8; }
+.tool-output { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .46; }
@@ -60,7 +65,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .launch-button:hover:not(:disabled), .accent-button:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 15px 42px rgba(159,101,254,.35); background: #f4e8ff; }
 .launch-button span, .accent-button span { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: rgba(37,19,58,.12); font-size: 18px; font-weight: 450; }
 
-.activity { position: fixed; z-index: 5; left: 50%; bottom: 22px; width: min(680px, calc(100% - 32px)); transform: translateX(-50%); overflow: hidden; border: 1px solid rgba(210,184,255,.19); border-radius: 20px; background: rgba(18,17,29,.92); box-shadow: 0 22px 70px rgba(0,0,0,.42), 0 0 35px rgba(145,93,226,.07); backdrop-filter: blur(28px); animation: dockIn .5s both; }
+.activity { position: relative; z-index: 5; flex: none; margin: 0 auto 22px; width: min(680px, calc(100% - 32px)); overflow: hidden; border: 1px solid rgba(210,184,255,.19); border-radius: 20px; background: rgba(18,17,29,.92); box-shadow: 0 22px 70px rgba(0,0,0,.42), 0 0 35px rgba(145,93,226,.07); backdrop-filter: blur(28px); animation: appear .5s both; }
 .activity-toggle { display: flex; align-items: center; gap: 13px; width: 100%; min-height: 73px; padding: 14px 18px; border: 0; background: transparent; color: inherit; text-align: left; }
 .activity-toggle:hover { background: rgba(255,255,255,.035); }
 .activity-indicator { width: 9px; height: 9px; flex: none; border-radius: 50%; background: #bba4ed; box-shadow: 0 0 16px #a783ed; animation: pulse 2s ease-in-out infinite; }
@@ -77,6 +82,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .progress-track { height: 3px; margin: 0 -19px 17px; background: rgba(255,255,255,.07); }
 .progress-track span { display: block; height: 100%; background: linear-gradient(90deg, #a079ed, #e0c2ff); box-shadow: 0 0 15px rgba(195,157,255,.5); transition: width .45s; }
 .diagnosis { color: #c0b9ce; font-size: 12px; line-height: 1.55; }
+.usage-line { color: #b9adc9; font-size: 11px; }
 .desktop-apps { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .desktop-apps span { padding: 6px 8px; border: 1px solid rgba(186,148,251,.18); border-radius: 8px; color: #d4c4eb; font-size: 11px; }
 .steps { margin: 0; padding: 0; list-style: none; }
@@ -106,7 +112,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dialog-close { width: 30px; height: 30px; border: 0; border-radius: 9px; background: rgba(255,255,255,.055); color: #aca3bc; font-size: 21px; line-height: 1; }
 .dialog-close:hover { color: white; background: rgba(255,255,255,.11); }
 .dialog-panel h1 { margin: 12px 0 22px; font-size: 30px; font-weight: 640; letter-spacing: -1.2px; }
-.mode-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 5px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(0,0,0,.2); }
+.mode-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 5px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(0,0,0,.2); }
+.provider-tabs { grid-template-columns: repeat(2, 1fr); }
 .mode-tabs button { min-height: 35px; border: 0; border-radius: 8px; background: transparent; color: #a39bb2; font-size: 12px; font-weight: 640; text-transform: capitalize; }
 .mode-tabs button.selected { background: rgba(200,166,251,.14); color: #f0e2ff; box-shadow: inset 0 1px rgba(255,255,255,.08); }
 .modal-form { display: flex; flex-direction: column; gap: 10px; padding-top: 22px; }
@@ -119,6 +126,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .desktop-actions { margin-top: 9px; }
 .desktop-actions .accent-button { min-height: 40px; padding: 0 12px 0 16px; gap: 13px; }
 .helper-text { margin: 1px 0 0; color: #a79db6; font-size: 12px; }
+.ai-answer { display: block; max-height: 210px; overflow: auto; padding: 13px; border: 1px solid rgba(215,187,255,.14); border-radius: 11px; background: rgba(5,6,14,.37); color: #e4ddec; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 @keyframes orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -126,12 +134,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @keyframes pulse { 50% { opacity: .55; } }
 @keyframes orbFloat { 50% { translate: 0 -8px; } }
 @keyframes appear { from { opacity: 0; transform: scale(.93); } to { opacity: 1; transform: scale(1); } }
-@keyframes dockIn { from { opacity: 0; transform: translate(-50%, 18px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 @media (max-width: 700px) {
   .scene { min-height: 520px; padding-bottom: 100px; }
   .orbit-field { width: min(95vw, 470px); min-width: 0; }
-  .activity { bottom: 12px; }
+  .activity { margin-bottom: 12px; }
   .activity-state { display: none; }
   .activity-body { max-height: 52svh; }
 }

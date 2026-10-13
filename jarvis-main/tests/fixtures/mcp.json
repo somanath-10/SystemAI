@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "fixture": {
+      "url": "${SYSTEMAI_TEST_MCP_URL}",
+      "allowedTools": ["read_status"],
+      "usdPerCall": 0.001
+    }
+  }
+}

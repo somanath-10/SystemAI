@@ -1,0 +1,112 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "enabled": false,
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "zapier": {
+      "enabled": false,
+      "url": "${ZAPIER_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "pipedream": {
+      "enabled": false,
+      "url": "${PIPEDREAM_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "exa": {
+      "enabled": false,
+      "url": "${EXA_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "serper": {
+      "enabled": false,
+      "url": "${SERPER_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "serpapi": {
+      "enabled": false,
+      "url": "${SERPAPI_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "higgsfield": {
+      "enabled": false,
+      "url": "${HIGGSFIELD_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "heygen": {
+      "enabled": false,
+      "url": "${HEYGEN_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "openrouter": {
+      "enabled": false,
+      "url": "${OPENROUTER_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "openrouter-image": {
+      "enabled": false,
+      "url": "${OPENROUTER_IMAGE_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "palmier-pro": {
+      "enabled": false,
+      "url": "${PALMIER_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "elevenlabs": {
+      "enabled": false,
+      "url": "${ELEVENLABS_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "android": {
+      "enabled": false,
+      "url": "${ANDROID_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "lottie-search": {
+      "enabled": false,
+      "url": "${LOTTIE_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "mcp-registry": {
+      "enabled": false,
+      "url": "${REGISTRY_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "Microsoft_Clarity": {
+      "enabled": false,
+      "url": "${CLARITY_MCP_URL}",
+      "allowedTools": [],
+      "usdPerCall": 0
+    },
+    "github": {
+      "enabled": false,
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
+      },
+      "allowedTools": [],
+      "usdPerCall": 0
+    }
+  }
+}

@@ -47,7 +47,11 @@ In progress: signed desktop observation/launch/click/set-value actions and isola
 
 ## V3 — Cost Intelligence + Learning + Monitoring
 
-Started: the active runtime now persists model-usage records, applies each task's cloud budget to local-first routing decisions, and exposes cost/routing API projections. Provider adapters, qualified skills, and durable monitors remain next.
+In progress: the active runtime persists model usage and enforces task cloud budgets. A loopback-only Ollama text/vision/embedding adapter with installed-model selection, an opt-in OpenAI Responses text/vision adapter with durable spend reservations, provider-availability-aware routing, evidence-based verification confidence, a compact usage view, explicit task-scoped semantic notes, non-executable skill-candidate previews with hash-bound review labels, and durable process-event alert rules are implemented. Local model calls require a running Ollama installation; OpenAI calls require a user key and verified rate/budget configuration, and have only been tested with mocked responses in this checkout.
+
+The Jarvis holographic UI, OpenAI streamed function loop, turn-based STT/TTS adapters, browser/Kokoro fallback, metered web search/image generation and configurable MCP transports are now implemented with mocked provider tests and real Chrome/UI checks. Live cloud calls, camera/gesture/audio hardware and account connectors need external setup. See the assistant workflow guide for feature coverage and cost/security limits.
+
+Still open: calibrated router benchmarks, skill replay/qualification/signing, demonstration capture/review and scheduled/action automations. Candidate previews are non-executable; semantic notes are explicitly submitted, not automatically learned from task history; process rules currently alert only and never execute host actions.
 
 - evaluation-calibrated ModelRouter.
 - local LLM/VLM providers.

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "identifier": "ai.system.systemai",
   "build": {
-    "beforeDevCommand": "cd ../ui && npm run dev",
+    "beforeDevCommand": "cd ../../../jarvis-main && npm start",
     "beforeBuildCommand": "cd ../ui && npm run build",
     "devUrl": "http://127.0.0.1:5802",
     "frontendDist": "../ui/dist"
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8765; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; base-uri 'self'; object-src 'none'; connect-src 'self' data: blob: https: http://127.0.0.1:8765 http://127.0.0.1:8787 ws://127.0.0.1:8787; frame-src 'self' http://127.0.0.1:8787 https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; img-src 'self' data: blob: http://127.0.0.1:8787; media-src 'self' data: blob: http://127.0.0.1:8787; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com"
     }
   },
   "bundle": {

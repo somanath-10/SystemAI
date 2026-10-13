@@ -14,7 +14,7 @@ def _now() -> str:
 
 _ALLOWED: dict[ActionJournalStatus, set[ActionJournalStatus]] = {
     ActionJournalStatus.PREPARED: {ActionJournalStatus.AUTHORIZED, ActionJournalStatus.REJECTED, ActionJournalStatus.FAILED},
-    ActionJournalStatus.AUTHORIZED: {ActionJournalStatus.DISPATCHING, ActionJournalStatus.REJECTED, ActionJournalStatus.FAILED},
+    ActionJournalStatus.AUTHORIZED: {ActionJournalStatus.PREPARED, ActionJournalStatus.DISPATCHING, ActionJournalStatus.REJECTED, ActionJournalStatus.FAILED},
     ActionJournalStatus.DISPATCHING: {ActionJournalStatus.DISPATCHED, ActionJournalStatus.COMMIT_STATUS_UNKNOWN, ActionJournalStatus.FAILED},
     ActionJournalStatus.DISPATCHED: {ActionJournalStatus.EFFECT_OBSERVED, ActionJournalStatus.COMMIT_STATUS_UNKNOWN, ActionJournalStatus.FAILED},
     ActionJournalStatus.EFFECT_OBSERVED: {ActionJournalStatus.VERIFIED, ActionJournalStatus.FAILED},

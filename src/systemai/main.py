@@ -78,8 +78,11 @@ def main() -> None:
     if args.cmd == "diagnose":
         raise SystemExit(asyncio.run(_diagnose(args)))
     if args.cmd == "events":
-        runtime = build_runtime(data_dir=data_dir)
-        print(json.dumps(runtime.store.list_events(task_id=args.task_id, limit=args.limit), indent=2, default=str))
+        from systemai.orchestration.event_store import EventStore
+
+        path = data_dir / "systemai.sqlite3"
+        events = EventStore(path, read_only=True).list_events(task_id=args.task_id, limit=args.limit) if path.exists() else []
+        print(json.dumps(events, indent=2, default=str))
         return
 
 

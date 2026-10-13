@@ -65,5 +65,5 @@ def test_cost_and_routing_api_for_an_existing_task(tmp_path: Path) -> None:
         "purpose": "classify a local diagnosis",
         "complexity": 0.1,
     })
-    assert routed.status_code == 200
-    assert routed.json()["tier"] == "local_small"
+    assert routed.status_code == 409
+    assert "no permitted inference tier" in routed.json()["detail"]

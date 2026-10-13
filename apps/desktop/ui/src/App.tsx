@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { assistantSessionId, selectedTaskId, selectTask } from "./taskContext";
+import { TaskTools } from "./TaskTools";
 
 type Step = {
   node_id: string;
@@ -12,6 +14,7 @@ type Task = {
   task_id: string;
   goal: { objective: string };
   project_root: string;
+  parent_task_id?: string | null;
   state: string;
   error?: string | null;
   pending_approvals: Record<string, string>;
@@ -22,7 +25,9 @@ type Task = {
 type Approval = { action_id: string; canonical_summary: string };
 type DesktopStatus = { available: boolean; allowed_applications: string[] };
 type BrowserStatus = { available: boolean; configured: boolean; allowed_origins: string[] };
-type Mode = "project" | "browser" | "desktop";
+type Mode = "project" | "browser" | "desktop" | "ai";
+type CostSummary = { budget: { max_external_cost_usd: number; max_external_calls: number; max_external_vision_calls: number }; totals: { local_calls: number; external_calls: number; external_cost_usd: number } };
+type InferenceStatus = { connected: boolean; models: Record<string, boolean>; installed_models?: string[]; openai?: { configured: boolean; model: string | null } };
 
 const API = import.meta.env.VITE_SYSTEMAI_API ?? "http://127.0.0.1:8765";
 const SATELLITES = Array.from({ length: 14 }, (_, index) => index);
@@ -36,6 +41,13 @@ export default function App() {
   const [desktopApp, setDesktopApp] = useState("");
   const [desktopStatus, setDesktopStatus] = useState<DesktopStatus | null>(null);
   const [browserStatus, setBrowserStatus] = useState<BrowserStatus | null>(null);
+  const [inferenceStatus, setInferenceStatus] = useState<InferenceStatus | null>(null);
+  const [cost, setCost] = useState<CostSummary | null>(null);
+  const [prompt, setPrompt] = useState("");
+  const [inferenceProvider, setInferenceProvider] = useState<"local" | "openai">("local");
+  const [selectedLocalModel, setSelectedLocalModel] = useState("");
+  const [inferenceImage, setInferenceImage] = useState<File | null>(null);
+  const [answer, setAnswer] = useState("");
   const [task, setTask] = useState<Task | null>(null);
   const [approval, setApproval] = useState<Approval | null>(null);
   const [showActivity, setShowActivity] = useState(false);
@@ -44,6 +56,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const terminal = !!task && ["completed", "failed", "cancelled"].includes(task.state);
+  const cloudReady = !!inferenceStatus?.openai?.configured && !!cost && cost.budget.max_external_calls > cost.totals.external_calls &&
+    cost.budget.max_external_cost_usd > cost.totals.external_cost_usd && (!inferenceImage || cost.budget.max_external_vision_calls > 0);
   const completedSteps = task?.steps.filter((step) => ["succeeded", "completed"].includes(step.state)).length ?? 0;
   const progress = task?.steps.length ? Math.round((completedSteps / task.steps.length) * 100) : 0;
   const stateLabel: Record<string, string> = {
@@ -51,7 +65,7 @@ export default function App() {
     waiting_for_resource: "Waiting for resource",
     user_takeover: "In your control",
   };
-  const taskLabel = task?.goal.objective.startsWith("browser.") ? "Browser" :
+  const taskLabel = task?.goal.objective === "Voice assistant conversation" ? "Assistant" : task?.goal.objective.startsWith("browser.") ? "Browser" :
     task?.goal.objective.startsWith("Inspect running desktop") || task?.goal.objective.includes(" in com.") ? "Desktop" : "Project";
   const activitySummary = taskLabel === "Browser" ? "Browser session" : taskLabel === "Desktop" ? "Desktop action" : task?.goal.objective;
 
@@ -71,6 +85,42 @@ export default function App() {
       .then((response) => response.ok ? response.json() : null)
       .then((status) => setBrowserStatus(status))
       .catch(() => setBrowserStatus(null));
+    fetch(`${API}/inference/status`)
+      .then((response) => response.ok ? response.json() : null)
+      .then(setInferenceStatus)
+      .catch(() => setInferenceStatus(null));
+  }
+
+  async function refreshCost(taskId: string) {
+    try {
+      const response = await fetch(`${API}/tasks/${taskId}/cost`);
+      if (response.ok) setCost(await response.json());
+    } catch { setCost(null); }
+  }
+
+  async function generate() {
+    if (!task) return;
+    setBusy(true);
+    setError(null);
+    setAnswer("");
+    try {
+      if (inferenceImage && inferenceImage.size > 4_000_000) throw new Error("Image must be at most 4 MB.");
+      const image_base64 = inferenceImage ? await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+        reader.onerror = () => reject(new Error("Image could not be read."));
+        reader.readAsDataURL(inferenceImage);
+      }) : undefined;
+      const external = inferenceProvider === "openai";
+      const response = await fetch(`${API}/tasks/${task.task_id}/inference/${external ? "openai" : "generate"}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, image_base64, ...(external ? { confirm_external: true } : { model: selectedLocalModel || undefined }) }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      setAnswer((await response.json()).text);
+      await refreshCost(task.task_id);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
   }
 
   async function submitTask(path: string, body?: object) {
@@ -78,13 +128,17 @@ export default function App() {
     setError(null);
     setApproval(null);
     try {
-      const response = await fetch(`${API}/tasks/${path}`, {
+      const parent = assistantSessionId();
+      const response = await fetch(`${API}/tasks/${path}${parent ? `?parent_task_id=${encodeURIComponent(parent)}` : ""}`, {
         method: "POST",
         ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
       });
       if (!response.ok) throw new Error(await response.text());
       const next: Task = await response.json();
       setTask(next);
+      selectTask(next.task_id);
+      setCost(null);
+      setAnswer("");
       setShowActivity(["waiting_for_approval", "failed"].includes(next.state));
       composer.current?.close();
     } catch (e) {
@@ -125,7 +179,7 @@ export default function App() {
     }
   }
 
-  async function control(action: "pause" | "resume" | "cancel") {
+  async function control(action: "pause" | "resume" | "cancel" | "take-control") {
     if (!task) return;
     setActionBusy(true);
     setError(null);
@@ -142,11 +196,22 @@ export default function App() {
 
   useEffect(() => {
     refreshStatus();
+    const taskId = new URLSearchParams(location.search).get("task_id") || selectedTaskId();
+    if (taskId) {
+      void fetch(`${API}/tasks/${encodeURIComponent(taskId)}`).then(async (response) => {
+        if (!response.ok) throw new Error("Task could not be loaded.");
+        setTask(await response.json());
+        setShowActivity(true);
+      }).catch((error: Error) => setError(error.message));
+    }
   }, []);
 
   useEffect(() => {
     if (!task) return;
     loadApproval(task).catch(() => setApproval(null));
+    void refreshCost(task.task_id);
+    const timer = window.setInterval(() => void refreshCost(task.task_id), 3000);
+    return () => window.clearInterval(timer);
   }, [task?.task_id, JSON.stringify(task?.pending_approvals ?? {})]);
 
   useEffect(() => {
@@ -184,9 +249,17 @@ export default function App() {
         </div>
         <div className="scene-actions">
           <button className="launch-button" onClick={() => openComposer()}>New task <span aria-hidden="true">↗</span></button>
+          <TaskTools api={API} taskId={task?.task_id} onSelect={async (id) => {
+            try {
+              const response = await fetch(`${API}/tasks/${encodeURIComponent(id)}`);
+              if (!response.ok) throw new Error("Task could not be loaded.");
+              setTask(await response.json()); selectTask(id); setShowActivity(true);
+            } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+          }} />
         </div>
       </section>
 
+      {error && !task && !composer.current?.open && <p className="error" role="alert">{error}</p>}
       {task && (
         <section className={`activity ${showActivity ? "expanded" : ""}`} aria-label="Current run">
           <button className="activity-toggle" onClick={() => setShowActivity(!showActivity)} aria-expanded={showActivity} aria-controls="activity-details">
@@ -213,6 +286,7 @@ export default function App() {
             </div>}
             {task.error && <p className="error" role="alert">{task.error}</p>}
             {error && <p className="error" role="alert">{error}</p>}
+            {cost && <p className="usage-line">Local calls {cost.totals.local_calls} · Cloud calls {cost.totals.external_calls} · Cloud spend ${cost.totals.external_cost_usd.toFixed(4)}</p>}
 
             <ol className="steps">
               {task.steps.map((step) => <li className={`step ${step.state}`} key={step.node_id}>
@@ -222,11 +296,12 @@ export default function App() {
               </li>)}
             </ol>
 
-            {!terminal && task.state !== "user_takeover" && <div className="button-row run-controls">
+            {!terminal && <div className="button-row run-controls">
               {task.state === "paused" || task.state === "waiting_for_resource" ?
                 <button className="subtle-button" onClick={() => control("resume")} disabled={actionBusy}>Resume</button> :
-                task.state !== "waiting_for_approval" && <button className="subtle-button" onClick={() => control("pause")} disabled={actionBusy}>Pause</button>}
+                !["waiting_for_approval", "user_takeover"].includes(task.state) && <button className="subtle-button" onClick={() => control("pause")} disabled={actionBusy}>Pause</button>}
               <button className="subtle-button danger-button" onClick={() => control("cancel")} disabled={actionBusy}>Stop</button>
+              {task.state !== "user_takeover" && <button className="subtle-button" onClick={() => control("take-control")} disabled={actionBusy}>Take control</button>}
             </div>}
           </div>}
         </section>
@@ -237,7 +312,7 @@ export default function App() {
           <div className="dialog-topline"><span className="dialog-kicker">SYSTEMAI</span><button className="dialog-close" onClick={() => composer.current?.close()} aria-label="Close dialog">×</button></div>
           <h1 id="composer-title">New task</h1>
           <div className="mode-tabs" role="group" aria-label="Task type">
-            {(["project", "browser", "desktop"] as const).map((item) => <button key={item} aria-pressed={mode === item} className={mode === item ? "selected" : ""} onClick={() => { setMode(item); setError(null); }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+            {(["project", "browser", "desktop", "ai"] as const).map((item) => <button key={item} aria-pressed={mode === item} className={mode === item ? "selected" : ""} onClick={() => { setMode(item); setError(null); }}>{item === "ai" ? "AI" : item[0].toUpperCase() + item.slice(1)}</button>)}
           </div>
 
           {mode === "project" && <form className="modal-form" onSubmit={(event) => { event.preventDefault(); void submitTask("developer-diagnosis", { project_root: projectRoot, goal, autonomy_mode: "standard_auto" }); }}>
@@ -268,6 +343,26 @@ export default function App() {
               <button className="accent-button" onClick={() => submitTask("desktop", { capability: "application.launch", bundle_id: desktopApp })} disabled={busy || !desktopStatus?.available || !desktopApp}>{busy ? "Starting…" : "Launch app"}<span aria-hidden="true">↗</span></button>
             </div>
           </div>}
+
+          {mode === "ai" && <form className="modal-form" onSubmit={(event) => { event.preventDefault(); void generate(); }}>
+            <div className="mode-tabs provider-tabs" role="group" aria-label="AI provider">
+              <button type="button" aria-pressed={inferenceProvider === "local"} className={inferenceProvider === "local" ? "selected" : ""} onClick={() => setInferenceProvider("local")}>Local</button>
+              <button type="button" aria-pressed={inferenceProvider === "openai"} className={inferenceProvider === "openai" ? "selected" : ""} onClick={() => setInferenceProvider("openai")}>OpenAI</button>
+            </div>
+            <label htmlFor="ai-prompt">Prompt</label>
+            <textarea id="ai-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={16000} required />
+            {inferenceProvider === "local" && <><label htmlFor="local-model">Model</label><select id="local-model" value={selectedLocalModel} onChange={(event) => setSelectedLocalModel(event.target.value)}>
+              <option value="">Configured default</option>
+              {inferenceStatus?.installed_models?.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select></>}
+            <label htmlFor="ai-image">Image (optional)</label>
+            <input id="ai-image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setInferenceImage(event.target.files?.[0] ?? null)} />
+            {!task && <p className="helper-text">Start a task first.</p>}
+            {task && inferenceProvider === "local" && !selectedLocalModel && !inferenceStatus?.models?.[inferenceImage ? "local_vlm" : "local_llm"] && <p className="helper-text">Choose an installed model or configure a default.</p>}
+            {task && inferenceProvider === "openai" && <p className="helper-text">{!inferenceStatus?.openai?.configured ? "OpenAI is not configured." : !cloudReady ? "No cloud budget remains for this task." : `Sends this prompt to OpenAI · task limit $${cost.budget.max_external_cost_usd.toFixed(2)}`}</p>}
+            <button className="accent-button form-submit" disabled={busy || !task || !prompt.trim() || (inferenceProvider === "openai" ? !cloudReady : !selectedLocalModel && !inferenceStatus?.models?.[inferenceImage ? "local_vlm" : "local_llm"])}>{busy ? "Thinking…" : inferenceProvider === "openai" ? "Send to OpenAI" : "Generate"}<span aria-hidden="true">↗</span></button>
+            {answer && <output className="ai-answer">{answer}</output>}
+          </form>}
 
           {error && <p className="error" role="alert">{error}</p>}
         </div>

@@ -33,10 +33,12 @@ class RoutingRequest(BaseModel):
     risk: RiskLevel = RiskLevel.LOW
     deterministic_available: bool = False
     cached_skill_available: bool = False
-    local_small_available: bool = True
-    local_llm_available: bool = True
+    local_small_available: bool = False
+    local_llm_available: bool = False
     local_vlm_available: bool = False
     specialist_api_available: bool = False
+    premium_api_available: bool = False
+    external_available: bool = False
     local_attempted: bool = False
     local_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     estimated_external_cost_usd: float = Field(default=0.01, ge=0.0)
@@ -102,7 +104,7 @@ class LocalFirstModelRouter:
                     max_context_fraction=0.25,
                 )
 
-        if request.complexity <= 0.28 and request.local_small_available and not self._local_failed(request):
+        if request.modality == Modality.TEXT and request.complexity <= 0.28 and request.local_small_available and not self._local_failed(request):
             return RoutingDecision(
                 tier=InferenceTier.LOCAL_SMALL,
                 reason="routine classification/routing fits the small local model tier",
@@ -110,7 +112,7 @@ class LocalFirstModelRouter:
                 max_context_fraction=0.18,
             )
 
-        if request.local_llm_available and not self._local_failed(request):
+        if request.modality == Modality.TEXT and request.local_llm_available and not self._local_failed(request):
             if request.complexity < self.premium_complexity_threshold and request.risk not in {
                 RiskLevel.HIGH,
                 RiskLevel.CRITICAL,
@@ -125,10 +127,10 @@ class LocalFirstModelRouter:
         external_ok, budget_reason = self.cost.can_use_external(
             request.task_id,
             estimated_cost_usd=request.estimated_external_cost_usd,
-            vision=request.external_vision,
+            vision=request.external_vision or request.modality in {Modality.VISION, Modality.MULTIMODAL},
             audio_seconds=request.external_audio_seconds,
         )
-        if external_ok:
+        if external_ok and request.external_available and (request.modality != Modality.AUDIO or request.specialist_api_available):
             if request.specialist_api_available and request.modality in {Modality.AUDIO, Modality.VISION}:
                 return RoutingDecision(
                     tier=InferenceTier.SPECIALIST_API,
@@ -136,10 +138,10 @@ class LocalFirstModelRouter:
                     external=True,
                     max_context_fraction=0.2,
                 )
-            if request.complexity >= self.premium_complexity_threshold or request.risk in {
+            if request.premium_api_available and (request.complexity >= self.premium_complexity_threshold or request.risk in {
                 RiskLevel.HIGH,
                 RiskLevel.CRITICAL,
-            }:
+            }):
                 return RoutingDecision(
                     tier=InferenceTier.PREMIUM_API,
                     reason="high complexity/risk warrants the strongest configured reasoning tier",
@@ -161,23 +163,38 @@ class LocalFirstModelRouter:
                 reason=f"external escalation blocked: {budget_reason}; using local VLM",
                 external=False,
             )
-        if request.local_llm_available:
+        if request.modality == Modality.TEXT and request.local_llm_available:
             return RoutingDecision(
                 tier=InferenceTier.LOCAL_LLM,
                 reason=f"external escalation blocked: {budget_reason}; using local LLM",
                 external=False,
             )
-        if request.local_small_available:
+        if request.modality == Modality.TEXT and request.local_small_available:
             return RoutingDecision(
                 tier=InferenceTier.LOCAL_SMALL,
                 reason=f"external escalation blocked: {budget_reason}; using local small model",
                 external=False,
             )
-        raise RuntimeError(f"no permitted inference tier available ({budget_reason})")
+        raise RuntimeError(f"no permitted inference tier available ({budget_reason if not external_ok else 'no configured provider'})")
 
     def _forced(self, request: RoutingRequest) -> RoutingDecision:
         tier = request.force_tier
         assert tier is not None
+        available = {
+            InferenceTier.DETERMINISTIC: request.deterministic_available or request.cached_skill_available,
+            InferenceTier.LOCAL_SMALL: request.local_small_available,
+            InferenceTier.LOCAL_LLM: request.local_llm_available,
+            InferenceTier.LOCAL_VLM: request.local_vlm_available,
+            InferenceTier.SPECIALIST_API: request.external_available and request.specialist_api_available,
+            InferenceTier.STANDARD_API: request.external_available,
+            InferenceTier.PREMIUM_API: request.external_available and request.premium_api_available,
+        }
+        if not available[tier]:
+            raise RuntimeError(f"forced tier {tier.value} is unavailable")
+        if (request.modality != Modality.TEXT and tier in {InferenceTier.LOCAL_SMALL, InferenceTier.LOCAL_LLM}) or (request.modality == Modality.AUDIO and tier == InferenceTier.LOCAL_VLM):
+            raise RuntimeError(f"forced tier {tier.value} cannot handle {request.modality.value}")
+        if request.modality == Modality.AUDIO and tier in {InferenceTier.STANDARD_API, InferenceTier.PREMIUM_API}:
+            raise RuntimeError(f"forced tier {tier.value} cannot handle audio")
         external = tier in {
             InferenceTier.SPECIALIST_API,
             InferenceTier.STANDARD_API,
@@ -187,7 +204,7 @@ class LocalFirstModelRouter:
             allowed, reason = self.cost.can_use_external(
                 request.task_id,
                 estimated_cost_usd=request.estimated_external_cost_usd,
-                vision=request.external_vision,
+                vision=request.external_vision or request.modality in {Modality.VISION, Modality.MULTIMODAL},
                 audio_seconds=request.external_audio_seconds,
             )
             if not allowed:

@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "//": "Use the fixed SystemAI UI port; the bridge accepts its configured loopback origin.",
+      "name": "jarvis",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 5802,
+      "autoPort": false
+    }
+  ]
+}

@@ -1,10 +1,19 @@
-.PHONY: test compile doctor api acceptance schemas ui-dev ui-build security-kernel-test clean
+.PHONY: test check bridge-test compile doctor api acceptance schemas dev ui-dev ui-build security-kernel-test clean
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTHONPATH := src
 
 test:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m pytest -q
+
+check: compile test bridge-test ui-build security-kernel-test acceptance
+
+bridge-test:
+	cd jarvis-main && npm run lint
+	cd jarvis-main && npm test
+
+dev:
+	cd jarvis-main && npm start
 
 compile:
 	$(PYTHON) -m compileall -q src tests scripts

@@ -7,6 +7,9 @@ __pycache__/
 .ruff_cache/
 *.db
 .env
+.env.local
+.env.*.local
+config/mcp.json
 node_modules/
 dist/
 target/

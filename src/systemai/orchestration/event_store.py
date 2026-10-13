@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,16 +25,19 @@ class EventStore:
     hash chained so accidental or unauthorized historical edits are detectable.
     """
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, read_only: bool = False) -> None:
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_schema()
+        self.read_only = read_only
+        if not read_only:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._init_schema()
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30)
+        conn = sqlite3.connect(self.db_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=30) if self.read_only else sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=FULL")
+        if not self.read_only:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=FULL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=30000")
         return conn
@@ -142,6 +146,24 @@ class EventStore:
                     last_sequence INTEGER NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS monitor_rules(
+                    rule_id TEXT PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    process_name TEXT NOT NULL,
+                    cooldown_seconds INTEGER NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    last_fired_at TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS semantic_notes(
+                    note_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL REFERENCES tasks(task_id),
+                    content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 4000),
+                    model_digest TEXT NOT NULL,
+                    vector_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_semantic_notes_task_model ON semantic_notes(task_id,model_digest);
                 """
             )
             columns = {row[1] for row in c.execute("PRAGMA table_info(model_calls)")}
@@ -201,14 +223,14 @@ class EventStore:
             "event_hash": event_hash,
         }
 
-    def list_events(self, *, task_id: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
+    def list_events(self, *, task_id: str | None = None, limit: int = 500, latest: bool = False) -> list[dict[str, Any]]:
         limit = min(max(int(limit), 1), 1_000)
         sql = "SELECT * FROM events"
         args: list[Any] = []
         if task_id:
             sql += " WHERE task_id=?"
             args.append(task_id)
-        sql += " ORDER BY sequence ASC LIMIT ?"
+        sql += " ORDER BY sequence " + ("DESC" if latest else "ASC") + " LIMIT ?"
         args.append(limit)
         with self.connect() as c:
             rows = c.execute(sql, args).fetchall()
@@ -218,6 +240,14 @@ class EventStore:
             d["payload"] = json.loads(d.pop("payload_json"))
             out.append(d)
         return out
+
+    def latest_skill_review(self, task_id: str) -> dict[str, Any] | None:
+        with self.connect() as c:
+            row = c.execute(
+                "SELECT payload_json, created_at FROM events WHERE task_id=? AND event_type='SkillCandidateReviewRecorded' ORDER BY sequence DESC LIMIT 1",
+                (task_id,),
+            ).fetchone()
+        return {**json.loads(row["payload_json"]), "recorded_at": row["created_at"]} if row else None
 
     def verify_chain(self) -> bool:
         prev_hash: str | None = None
@@ -285,7 +315,11 @@ class EventStore:
 
     def record_model_call(self, record: dict[str, Any]) -> None:
         with self.connect() as c:
-            c.execute(
+            self._insert_model_call(c, record)
+
+    @staticmethod
+    def _insert_model_call(c: sqlite3.Connection, record: dict[str, Any]) -> None:
+        c.execute(
                 """
                 INSERT INTO model_calls(
                     call_id,task_id,provider,model,kind,input_tokens,output_tokens,
@@ -298,9 +332,130 @@ class EventStore:
                     record["audio_seconds"], record["estimated_cost_usd"], record.get("latency_ms", 0.0),
                     _canonical(record.get("metadata", {})), record["created_at"],
                 ),
+        )
+
+    def reserve_external_model_call(self, record: dict[str, Any], *, max_cost: float, max_calls: int,
+                                    max_vision_calls: int, max_audio_seconds: float = 120,
+                                    active_calls: tuple[str, ...] = ()) -> str | None:
+        """Atomically hold budget across processes before an external request."""
+        with self.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            rows = c.execute(
+                """SELECT call_id,estimated_cost_usd,images,audio_seconds,metadata_json FROM model_calls
+                   WHERE task_id=? AND kind IN ('specialist_api','standard_api','premium_api')""",
+                (record["task_id"],),
+            ).fetchall()
+            active = set(active_calls)
+            uncertain = any(json.loads(row["metadata_json"]).get("billing_state") == "overrun" or
+                            (json.loads(row["metadata_json"]).get("billing_state") == "reserved" and row["call_id"] not in active)
+                            for row in rows)
+            reason = (
+                "previous external charge is unresolved" if uncertain else
+                "external call budget exhausted" if len(rows) + 1 > max_calls else
+                "external dollar budget exhausted" if sum(row["estimated_cost_usd"] for row in rows) + record["estimated_cost_usd"] > max_cost + 1e-12 else
+                "external vision-call budget exhausted" if record["image_count"] and sum(row["images"] > 0 for row in rows) + 1 > max_vision_calls else
+                "external audio budget exhausted" if sum(row["audio_seconds"] for row in rows) + record["audio_seconds"] > max_audio_seconds else None
             )
+            if reason is None:
+                self._insert_model_call(c, record)
+            return reason
+
+    def settle_external_model_call(self, call_id: str, *, input_tokens: int, output_tokens: int,
+                                   estimated_cost_usd: float, latency_ms: float) -> bool:
+        with self.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            row = c.execute("SELECT estimated_cost_usd,metadata_json FROM model_calls WHERE call_id=?", (call_id,)).fetchone()
+            if row is None or json.loads(row["metadata_json"]).get("billing_state") != "reserved":
+                raise ValueError("external reservation is missing or already settled")
+            overrun = estimated_cost_usd > row["estimated_cost_usd"] + 1e-12
+            metadata = json.loads(row["metadata_json"])
+            metadata["billing_state"] = "overrun" if overrun else "settled"
+            c.execute(
+                "UPDATE model_calls SET input_tokens=?,output_tokens=?,estimated_cost_usd=?,latency_ms=?,metadata_json=? WHERE call_id=?",
+                (input_tokens, output_tokens, estimated_cost_usd, latency_ms, _canonical(metadata), call_id),
+            )
+            return overrun
+
+    def has_unsettled_external(self, task_id: str, *, active_calls: tuple[str, ...] = ()) -> bool:
+        with self.connect() as c:
+            rows = c.execute(
+                """SELECT call_id,metadata_json FROM model_calls WHERE task_id=? AND
+                   json_extract(metadata_json,'$.billing_state') IN ('reserved','overrun')""", (task_id,),
+            ).fetchall()
+        active = set(active_calls)
+        return any(row["call_id"] not in active or json.loads(row["metadata_json"])["billing_state"] == "overrun" for row in rows)
 
     def model_calls_for(self, task_id: str) -> list[dict[str, Any]]:
         with self.connect() as c:
             rows = c.execute("SELECT * FROM model_calls WHERE task_id=? ORDER BY created_at,call_id", (task_id,)).fetchall()
         return [dict(row) | {"metadata": json.loads(row["metadata_json"])} for row in rows]
+
+    def add_monitor_rule(self, event_type: str, process_name: str, cooldown_seconds: int) -> dict[str, Any]:
+        rule_id = f"rule_{uuid4().hex[:16]}"
+        with self.connect() as c:
+            c.execute("INSERT INTO monitor_rules(rule_id,event_type,process_name,cooldown_seconds,created_at) VALUES(?,?,?,?,?)",
+                      (rule_id, event_type, process_name, cooldown_seconds, _now()))
+        return {"rule_id": rule_id, "event_type": event_type, "process_name": process_name,
+                "cooldown_seconds": cooldown_seconds, "enabled": True}
+
+    def monitor_rules(self) -> list[dict[str, Any]]:
+        with self.connect() as c:
+            rows = c.execute("SELECT * FROM monitor_rules ORDER BY created_at,rule_id").fetchall()
+        return [dict(row) | {"enabled": bool(row["enabled"])} for row in rows]
+
+    def set_monitor_rule_enabled(self, rule_id: str, enabled: bool) -> bool:
+        with self.connect() as c:
+            updated = c.execute("UPDATE monitor_rules SET enabled=? WHERE rule_id=?", (int(enabled), rule_id)).rowcount
+        return bool(updated)
+
+    def match_monitor_rules(self, event_type: str, process_name: str) -> list[str]:
+        """Claim matching alerts transactionally so concurrent events respect cooldown."""
+        from datetime import timedelta
+
+        now = datetime.now(timezone.utc)
+        matched: list[str] = []
+        with self.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            rows = c.execute("SELECT rule_id,cooldown_seconds,last_fired_at FROM monitor_rules WHERE enabled=1 AND event_type=? AND process_name=?",
+                             (event_type, process_name)).fetchall()
+            for row in rows:
+                previous = datetime.fromisoformat(row["last_fired_at"]) if row["last_fired_at"] else None
+                if previous is not None and now - previous < timedelta(seconds=row["cooldown_seconds"]):
+                    continue
+                c.execute("UPDATE monitor_rules SET last_fired_at=? WHERE rule_id=?", (now.isoformat(), row["rule_id"]))
+                matched.append(row["rule_id"])
+        return matched
+
+    def add_semantic_note(self, task_id: str, content: str, model_digest: str, vector: list[float]) -> str:
+        note_id = f"mem_{uuid4().hex[:16]}"
+        with self.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            count = c.execute("SELECT count(*) FROM semantic_notes WHERE task_id=?", (task_id,)).fetchone()[0]
+            if count >= 500:
+                raise ValueError("task memory limit reached (500 notes)")
+            c.execute("INSERT INTO semantic_notes(note_id,task_id,content,model_digest,vector_json,created_at) VALUES(?,?,?,?,?,?)",
+                      (note_id, task_id, content, model_digest, _canonical(vector), _now()))
+        return note_id
+
+    def search_semantic_notes(self, task_id: str, model_digest: str, query: list[float], limit: int) -> list[dict[str, Any]]:
+        # ponytail: linear scan is bounded to 500 notes/task; use sqlite-vec if that ceiling becomes real.
+        with self.connect() as c:
+            rows = c.execute("SELECT note_id,content,vector_json FROM semantic_notes WHERE task_id=? AND model_digest=? LIMIT 500",
+                             (task_id, model_digest)).fetchall()
+        query_norm = math.sqrt(sum(value * value for value in query))
+        if not query_norm:
+            raise ValueError("query embedding is empty")
+        matches = []
+        for row in rows:
+            vector = json.loads(row["vector_json"])
+            if len(vector) != len(query):
+                continue
+            norm = math.sqrt(sum(value * value for value in vector))
+            if norm:
+                score = sum(a * b for a, b in zip(vector, query)) / (norm * query_norm)
+                matches.append({"note_id": row["note_id"], "content": row["content"], "score": score})
+        return sorted(matches, key=lambda item: item["score"], reverse=True)[:limit]
+
+    def delete_semantic_note(self, task_id: str, note_id: str) -> bool:
+        with self.connect() as c:
+            return bool(c.execute("DELETE FROM semantic_notes WHERE task_id=? AND note_id=?", (task_id, note_id)).rowcount)
