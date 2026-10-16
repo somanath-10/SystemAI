@@ -2,7 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore, type OrbitObject } from '../store'
-import { BRIDGE_HTTP_URL } from '../config'
+import { BRIDGE_HTTP_URL, bridgeMediaURL } from '../config'
+import { useMediaKey } from '../lib/useMediaKey'
 
 /**
  * Images revolving around the reactor.
@@ -42,8 +43,9 @@ const DISK_PATH =
  */
 function resolveSrc(src: string): string {
   const path = src.replace(/^file:\/\//, '')
-  if (!DISK_PATH.test(path)) return src
-  return `${BRIDGE_HTTP_URL}/file?path=${encodeURIComponent(path)}`
+  if (DISK_PATH.test(path)) return bridgeMediaURL(`${BRIDGE_HTTP_URL}/file?path=${encodeURIComponent(path)}`)
+  if (!/^https?:\/\//i.test(src)) return src
+  return bridgeMediaURL(src.startsWith(`${BRIDGE_HTTP_URL}/`) ? src : `${BRIDGE_HTTP_URL}/img?url=${encodeURIComponent(src)}`)
 }
 
 type Entry = {
@@ -85,13 +87,14 @@ function release(group: THREE.Group, entry: Entry) {
 }
 
 export function Orbits() {
+  const credential = useMediaKey()
   const loader = useMemo(() => new THREE.TextureLoader(), [])
   const group = useMemo(() => new THREE.Group(), [])
   /** One quad, shared by every object — only the scale differs. */
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
   const entries = useMemo(() => new Map<string, Entry>(), [])
   /** Last list identity seen, so the reconcile below is skipped when idle. */
-  const seen = useMemo<{ list: OrbitObject[] | null }>(() => ({ list: null }), [])
+  const seen = useMemo<{ list: OrbitObject[] | null; credential: string }>(() => ({ list: null, credential: '' }), [])
 
   useEffect(() => {
     return () => {
@@ -161,7 +164,7 @@ export function Orbits() {
     }
   }
 
-  function sync(list: OrbitObject[]) {
+  function sync(list: OrbitObject[], refresh: boolean) {
     const alive = new Set<string>()
     for (const def of list) {
       alive.add(def.id)
@@ -177,7 +180,7 @@ export function Orbits() {
       // Replacing an id keeps the object on screen and swaps what it is showing
       // rather than blinking it out and back in — but only the source is worth
       // reloading for, and a re-stated phase is a request to reposition.
-      if (entry.def.src !== def.src) attach(entry, def.src)
+      if (refresh || entry.def.src !== def.src) attach(entry, def.src)
       if (entry.def.phase !== def.phase) entry.angle = def.phase * DEG
       entry.def = def
     }
@@ -190,9 +193,11 @@ export function Orbits() {
 
   useFrame((state, dt) => {
     const { orbits } = useStore.getState().ui
-    if (orbits !== seen.list) {
+    if (orbits !== seen.list || credential !== seen.credential) {
+      const refresh = credential !== seen.credential
       seen.list = orbits
-      sync(orbits)
+      seen.credential = credential
+      sync(orbits, refresh)
     }
     if (entries.size === 0) return
 

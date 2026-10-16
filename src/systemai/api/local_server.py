@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -21,6 +22,7 @@ from systemai.intelligence import RoutingRequest
 from systemai.intelligence.ollama import LocalModelUnavailable
 from systemai.intelligence.openai_responses import OpenAIUnavailable
 from systemai.runtime import VERSION, build_runtime
+from systemai.security.local_access import local_api_token
 
 
 class DiagnoseRequest(BaseModel):
@@ -118,6 +120,7 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
             await runtime.stop_monitoring()
             if runtime.browser:
                 await runtime.browser.close()
+            runtime.close()
 
     app = FastAPI(title="SystemAI Local Control API", version=VERSION, lifespan=lifespan)
     local_ui_origins = {"http://localhost:5802", "http://127.0.0.1:5802", "tauri://localhost"}
@@ -127,7 +130,7 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
         allow_origins=sorted(local_ui_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     @app.middleware("http")
@@ -136,16 +139,32 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
             origin = request.headers.get("origin")
             if origin and origin not in local_ui_origins:
                 return JSONResponse({"detail": "untrusted browser origin"}, status_code=403)
+        if request.method != "OPTIONS" and request.url.path != "/health":
+            supplied = request.headers.get("authorization", "")
+            if not secrets.compare_digest(supplied.encode(), ("Bearer " + app.state.api_token).encode()):
+                return JSONResponse({"detail": "Local access key required"}, status_code=401,
+                                    headers={"WWW-Authenticate": "Bearer", "Cache-Control": "no-store"})
+        if getattr(runtime, "_closed", False):
+            return JSONResponse({"detail": "Runtime is closed"}, status_code=503)
         return await call_next(request)
     settings = settings or Settings(_env_file=None if data_dir is not None else ".env")
     data_dir = data_dir or settings.data_dir
     runtime = build_runtime(data_dir=data_dir, desktop_client=desktop_client, settings=settings)
     app.state.runtime = runtime
+    try:
+        app.state.api_token = local_api_token(runtime.data_dir, settings.api_token.get_secret_value())
+    except BaseException:
+        runtime.close()
+        raise
     app.include_router(assistant_router)
+
+    @app.get("/auth/check")
+    async def auth_check() -> dict:
+        return {"authenticated": True, "operation_timeout_ms": int(max(120, settings.openai_timeout_seconds, settings.ollama_timeout_seconds) * 2000 + 10_000)}
 
     @app.get("/health")
     async def health() -> dict:
-        return {"status": "ok", "version": VERSION, "event_chain_valid": runtime.store.verify_chain()}
+        return {"status": "ok", "version": VERSION, "authentication_required": True, "event_chain_valid": runtime.store.verify_chain()}
 
     @app.get("/capabilities")
     async def capabilities() -> dict:
@@ -397,6 +416,3 @@ def create_app(data_dir: Path | None = None, *, desktop_client: DesktopToolClien
         return {"items": runtime.store.list_events(task_id=task_id, limit=limit, latest=latest)}
 
     return app
-
-
-app = create_app()

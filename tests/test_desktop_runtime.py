@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings

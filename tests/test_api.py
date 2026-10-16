@@ -2,7 +2,7 @@ from pathlib import Path
 from stat import S_IMODE
 
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 

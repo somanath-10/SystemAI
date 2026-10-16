@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Thread
 
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings
@@ -133,6 +133,7 @@ def test_semantic_memory_is_task_scoped_durable_and_model_specific(tmp_path: Pat
     assert blue.status_code == 200
     assert client.post(f"/tasks/{other_task}/memory/search", json={"query": "red"}).json()["items"] == []
 
+    client.app.state.runtime.close()
     restored = TestClient(create_app(data_dir, settings=settings), base_url="http://127.0.0.1:8765")
     search = restored.post(f"/tasks/{task_id}/memory/search", json={"query": "red", "limit": 1})
     assert search.status_code == 200

@@ -5,7 +5,7 @@ import { createServer as netServer } from 'node:net'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import WebSocket from 'ws'
@@ -16,6 +16,92 @@ import { displayServer } from '../bridge/panels.mjs'
 import { chromeServer } from '../bridge/chrome.mjs'
 import { proxySpeech, speechStatus } from '../bridge/speech.mjs'
 import { systemaiServer } from '../bridge/systemai.mjs'
+import { api as apiRequest, OPERATION_TIMEOUT_MS, ROOT } from '../bridge/config.mjs'
+
+const accessToken = 'fixture-access-' + 'a'.repeat(64)
+process.env.SYSTEMAI_API_TOKEN = accessToken
+
+test('development server cannot serve runtime keys or private SQLite files', async () => {
+  const directory = await mkdtemp(join(ROOT, '.access-test-'))
+  const ui = join(ROOT, 'apps/desktop/ui')
+  let vite
+  try {
+    await mkdir(join(directory, 'keys'))
+    await writeFile(join(directory, 'keys/local-api-token'), 'b'.repeat(64), { mode: 0o600 })
+    await writeFile(join(directory, 'systemai.sqlite3'), 'private fixture', { mode: 0o600 })
+    const { createServer } = await import('../../apps/desktop/ui/node_modules/vite/dist/node/index.js')
+    vite = await createServer({ root: ui, configFile: join(ui, 'vite.config.ts'), logLevel: 'silent',
+      server: { host: '127.0.0.1', port: await freePort(), strictPort: true, preTransformRequests: false } })
+    await vite.listen()
+    const port = vite.httpServer.address().port
+    for (const path of ['keys/local-api-token', 'systemai.sqlite3']) {
+      const response = await fetch(`http://127.0.0.1:${port}/@fs${directory}/${path}`)
+      assert.equal(response.status, 403)
+      assert.ok(!(await response.text()).includes('private fixture'))
+    }
+    const frontend = await vite.ssrLoadModule('/src/api.ts')
+    frontend.saveAccessKey(accessToken)
+    frontend.saveMediaKey('b'.repeat(64))
+    const config = await vite.ssrLoadModule('/@fs' + join(ROOT, 'jarvis-main/src/config.ts'))
+    const media = config.bridgeMediaURL('/img?url=https%3A%2F%2Fexample.com%2Fimage.png')
+    assert.equal(new URL(media).searchParams.get('media_token'), 'b'.repeat(64))
+    assert.ok(!media.includes(accessToken))
+    assert.equal(config.bridgeMediaURL('/authenticate'), 'data:,')
+    await assert.rejects(async () => frontend.apiFetch('https://untrusted.example/'), /another origin/)
+    const previousWindow = globalThis.window
+    const transport = globalThis.fetch
+    globalThis.window = new EventTarget()
+    try {
+      let updates = 0
+      const unwatch = frontend.watchMediaKey(() => updates++)
+      frontend.saveMediaKey('c'.repeat(64))
+      frontend.saveMediaKey('c'.repeat(64))
+      assert.equal(updates, 1)
+      assert.equal(new URL(config.bridgeMediaURL('/file?path=fixture.png')).searchParams.get('media_token'), 'c'.repeat(64))
+      unwatch()
+      frontend.saveMediaKey('d'.repeat(64))
+      assert.equal(updates, 1)
+      let reloads = 0
+      globalThis.window.top = { location: { reload: () => reloads++ } }
+      globalThis.fetch = async () => {
+        frontend.saveAccessKey(accessToken + '-new')
+        return Response.json({ detail: 'Unauthorized' }, { status: 401 })
+      }
+      await frontend.apiFetch(frontend.API + '/tasks')
+      assert.equal(reloads, 0, 'a late rejection must not revoke a newer access key')
+      globalThis.fetch = async () => Response.json({ detail: 'Unauthorized' }, { status: 401 })
+      await frontend.apiFetch(frontend.API + '/tasks')
+      assert.equal(reloads, 1, 'a rejected current key relocks the top-level workspace')
+      assert.equal(frontend.accessKey(), '')
+      assert.equal(frontend.mediaKey(), '')
+    } finally {
+      globalThis.fetch = transport
+      if (previousWindow === undefined) delete globalThis.window
+      else globalThis.window = previousWindow
+    }
+  } finally { await vite?.close(); await rm(directory, { recursive: true, force: true }) }
+})
+
+test('API calls carry access keys and long operations outlast backend deadlines', async () => {
+  const transport = globalThis.fetch, timeout = AbortSignal.timeout, deadlines = []
+  AbortSignal.timeout = (milliseconds) => { deadlines.push(milliseconds); return timeout(50) }
+  globalThis.fetch = async (url, options) => {
+    assert.equal(options.headers.get('authorization'), `Bearer ${accessToken}`)
+    if (String(url).endsWith('/assistant/tools/image')) await delay(25)
+    if (options.signal.aborted) throw new Error('request aborted')
+    return Response.json({ ok: true })
+  }
+  try {
+    await apiRequest('/tasks/fixture/assistant/tools/image')
+    await apiRequest('/tasks/fixture/inference/generate')
+    await apiRequest('/assistant/sessions', { method: 'POST' })
+    assert.deepEqual(deadlines, [OPERATION_TIMEOUT_MS, OPERATION_TIMEOUT_MS, 60_000])
+    assert.ok(OPERATION_TIMEOUT_MS > 120_000)
+    const signal = new AbortController().signal
+    await apiRequest('/health', { signal })
+    assert.equal(deadlines.length, 3)
+  } finally { globalThis.fetch = transport; AbortSignal.timeout = timeout }
+})
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 async function until(check) {
@@ -142,6 +228,27 @@ test('bridge streams a function loop and proxies STT/TTS only for connected sess
   t.after(async () => { socket?.close(); child.kill('SIGTERM'); if (child.exitCode === null) await once(child, 'exit'); await new Promise((resolve) => api.close(resolve)) })
   await until(() => logs.includes('bridge listening'))
   const base = `http://127.0.0.1:${port}`
+  await t.test('bridge requires authentication before initializing sessions', async () => {
+    assert.equal((await fetch(base + '/tts', { method: 'POST', headers: { origin: 'http://127.0.0.1:5802' }, body: '{}' })).status, 401)
+    assert.equal((await fetch(base + '/file?path=/fixture.png')).status, 401)
+    const before = sessions
+    const bad = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'http://127.0.0.1:5802' })
+    await once(bad, 'open'); bad.send(JSON.stringify({ type: 'authenticate', token: 'wrong' }))
+    assert.equal((await once(bad, 'close'))[0], 1008)
+    assert.equal(sessions, before)
+    const authenticated = await fetch(base + '/authenticate', { method: 'POST', headers: { origin: 'http://127.0.0.1:5802', authorization: `Bearer ${accessToken}` } })
+    assert.equal(authenticated.status, 200)
+    const media = (await authenticated.json()).media_token
+    const cookie = authenticated.headers.get('set-cookie').split(';')[0]
+    assert.ok(!cookie.includes(accessToken))
+    assert.equal((await fetch(base + '/file?path=/fixture.png', { headers: { cookie } })).status, 400)
+    assert.equal((await fetch(base + `/file?path=/fixture.png&media_token=${media}`)).status, 400)
+    assert.equal((await fetch(base + `/tts?media_token=${media}`, { method: 'POST', headers: { origin: 'http://127.0.0.1:5802' }, body: '{}' })).status, 401)
+    const mediaSocket = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'http://127.0.0.1:5802' })
+    await once(mediaSocket, 'open'); mediaSocket.send(JSON.stringify({ type: 'authenticate', token: media }))
+    assert.equal((await once(mediaSocket, 'close'))[0], 1008)
+    assert.equal((await fetch(base + '/tts', { method: 'POST', headers: { origin: 'http://127.0.0.1:5802', cookie }, body: '{}' })).status, 401)
+  })
   await t.test('bridge refuses non-loopback Host headers', async () => {
     for (const host of ['attacker.example', `127.0.0.1:${port}/..`, `attacker.example@127.0.0.1:${port}`, `127.0.0.1:${port}?`, 'localhost']) {
       const status = await new Promise((resolve, reject) => {
@@ -158,7 +265,8 @@ test('bridge streams a function loop and proxies STT/TTS only for connected sess
   const [error] = await once(rejected, 'error'); assert.match(error.message, /403/)
   socket = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'http://127.0.0.1:5802' })
   const frames = []; socket.on('message', (raw) => frames.push(JSON.parse(raw)))
-  await once(socket, 'open'); await until(() => frames.some((frame) => frame.session_id))
+  await once(socket, 'open'); socket.send(JSON.stringify({ type: 'authenticate', token: accessToken })); await until(() => frames.some((frame) => frame.session_id))
+  assert.match(frames.find((frame) => frame.type === 'authenticated').media_token, /^[0-9a-f]{64}$/)
   for (const value of ['null', '[]', '0', '"text"', '{}']) socket.send(value)
   socket.send(JSON.stringify({ type: 'ask', id: 'a1', text: 'make it red' }))
   await until(() => frames.some((frame) => frame.type === 'done'))
@@ -171,7 +279,7 @@ test('bridge streams a function loop and proxies STT/TTS only for connected sess
   assert.ok(modelInputs[1].tools.some((tool) => tool.name === 'mcp__fixture__read_status'))
   assert.equal(modelInputs[0].confirm_external, true)
   assert.equal((await fetch(base + '/tts', { method: 'POST', body: '{}' })).status, 403)
-  const headers = { origin: 'http://127.0.0.1:5802', 'content-type': 'application/json', 'x-systemai-session': 'task-fixture' }
+  const headers = { authorization: `Bearer ${accessToken}`, origin: 'http://127.0.0.1:5802', 'content-type': 'application/json', 'x-systemai-session': 'task-fixture' }
   const audio = await fetch(base + '/tts', { method: 'POST', headers, body: '{"text":"hello"}' })
   assert.equal(await audio.text(), 'ID3fixture')
   headers['x-systemai-session'] = 'unknown'
@@ -217,12 +325,13 @@ test('bridge streams a function loop and proxies STT/TTS only for connected sess
     holdSession = true
     const lateSocket = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'http://127.0.0.1:5802' })
     await once(lateSocket, 'open')
+    lateSocket.send(JSON.stringify({ type: 'authenticate', token: accessToken }))
     await until(() => Boolean(finishSession))
     lateSocket.close(); await once(lateSocket, 'close')
     const before = statusReads
     finishSession()
     await until(() => statusReads > before)
-    const speech = await fetch(base + '/tts', { method: 'POST', headers: { origin: 'http://127.0.0.1:5802', 'content-type': 'application/json', 'x-systemai-session': 'task_closed' }, body: '{"text":"hello"}' })
+    const speech = await fetch(base + '/tts', { method: 'POST', headers: { authorization: `Bearer ${accessToken}`, origin: 'http://127.0.0.1:5802', 'content-type': 'application/json', 'x-systemai-session': 'task_closed' }, body: '{"text":"hello"}' })
     assert.equal(speech.status, 403)
   })
 })

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.contracts.models import (
@@ -68,10 +68,11 @@ def test_skill_candidate_api_is_read_only_and_fail_closed(tmp_path: Path) -> Non
     assert reviewed.json()["review"]["non_authorizing"] is True
     assert reviewed.json()["qualified"] is False
     assert reviewed.json()["replay_authorized"] is False
+    client.app.state.runtime.close()
     restored = TestClient(create_app(data_dir), base_url="http://127.0.0.1:8765")
     assert restored.get(f"/tasks/{task_id}/skill-candidate").json()["review"]["decision"] == "reject"
-    assert client.get("/tasks/unknown/skill-candidate").status_code == 404
-    assert client.post("/tasks/unknown/skill-candidate/review", json={"candidate_hash": candidate_hash, "decision": "reject"}).status_code == 404
+    assert restored.get("/tasks/unknown/skill-candidate").status_code == 404
+    assert restored.post("/tasks/unknown/skill-candidate/review", json={"candidate_hash": candidate_hash, "decision": "reject"}).status_code == 404
     assert client.app.state.runtime.store.verify_chain()
 
 

@@ -115,7 +115,7 @@ npm --prefix apps/desktop/ui ci
 make dev
 ```
 
-Open `http://127.0.0.1:5802/`. Message opens typed chat; Task Center opens the existing task/approval controls. See [the assistant workflow and setup](docs/guides/ASSISTANT_WORKFLOW.md) and [Jarvis integration guide](jarvis-main/README.md). Server secrets stay in `.env`; optional speech/search/image settings are disabled placeholders in `.env.example`.
+Open `http://127.0.0.1:5802/` and unlock with the owner-only key in `SYSTEMAI_DATA_DIR/keys/local-api-token`, or your private `SYSTEMAI_API_TOKEN`. API clients require `Authorization: Bearer <local-access-key>`; the bridge authenticates before creating sessions. No provider key is sent to the UI. Message opens typed chat; Task Center opens task/approval controls. See [the assistant workflow and setup](docs/guides/ASSISTANT_WORKFLOW.md) and [Jarvis integration guide](jarvis-main/README.md). Server secrets stay private; optional speech/search/image settings are disabled placeholders in `.env.example`.
 
 ```bash
 systemai-api

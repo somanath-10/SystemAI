@@ -55,7 +55,8 @@ class AssistantAuditRequest(BaseModel):
 
 
 class ExternalUsageRequest(BaseModel):
-    phase: Literal["reserve", "settle"]
+    phase: Literal["reserve", "renew", "abandon", "settle"]
+    worker_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     provider: str = Field(pattern=r"^(?:mcp-[a-zA-Z0-9_-]{1,32}|elevenlabs|deepgram|cartesia|sarvam)$")
     feature: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,128}$")
     estimated_cost_usd: float = Field(gt=0, le=10)
@@ -71,19 +72,23 @@ async def external_usage(task_id: str, body: ExternalUsageRequest, request: Requ
         if body.phase == "reserve":
             record = UsageRecord(task_id=cost_id, provider=body.provider, model=body.feature, kind="specialist_api",
                                  audio_seconds=body.audio_seconds, estimated_cost_usd=body.estimated_cost_usd,
-                                 metadata={"feature": body.feature, "charge_basis": "configured connector ceiling"})
+                                 metadata={"feature": body.feature, "worker_id": body.worker_id, "charge_basis": "configured connector ceiling"})
             runtime.cost.reserve_external(record)
-            # The bridge owns this request; unknown completion must block further charges.
-            runtime.cost.abandon_external(record.call_id)
+            runtime.cost.lease_external(record.call_id, body.worker_id)
             return {"call_id": record.call_id}
         record = next((item for item in runtime.cost.records_for(cost_id) if item.call_id == body.call_id), None)
-        if not record or record.provider != body.provider or record.model != body.feature:
+        if not record or record.provider != body.provider or record.model != body.feature or record.metadata.get("worker_id") != body.worker_id:
             raise HTTPException(404, "connector reservation not found")
         if record.metadata.get("billing_state") != "reserved" or record.estimated_cost_usd != body.estimated_cost_usd:
             raise HTTPException(409, "connector reservation is already settled or mismatched")
-        runtime.cost.settle_external(record)
+        if body.phase == "renew":
+            runtime.cost.renew_external(record.call_id, body.worker_id)
+        elif body.phase == "abandon":
+            runtime.cost.abandon_external(record.call_id)
+        else:
+            runtime.cost.settle_external(record)
         return {"call_id": record.call_id}
-    except BudgetExceeded as exc:
+    except (BudgetExceeded, ValueError) as exc:
         raise HTTPException(409, str(exc)) from exc
 
 

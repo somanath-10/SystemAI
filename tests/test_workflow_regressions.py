@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings
@@ -43,6 +43,7 @@ async def test_pre_dispatch_authorization_restart_gets_fresh_authorization(tmp_p
     runtime._persist(session)
     runtime.journal.prepare(action)
     runtime.journal.transition(action, ActionJournalStatus.AUTHORIZED, token_nonce="expired-token")
+    runtime.close()
     restored = build_runtime(data_dir=data, settings=settings)
     finished = await restored.resume(session.task_id)
     assert finished.state == TaskState.COMPLETED
@@ -92,6 +93,7 @@ async def test_restart_after_observation_never_reexecutes(tmp_path, status):
         runtime.journal.transition(action, state, result=result)
     if status == ActionJournalStatus.VERIFIED:
         runtime.journal.transition(action, status)
+    runtime.close()
     restored = build_runtime(data_dir=tmp_path / "data", settings=settings)
     async def forbidden(*args, **kwargs):
         pytest.fail("A durably observed action must not execute again")

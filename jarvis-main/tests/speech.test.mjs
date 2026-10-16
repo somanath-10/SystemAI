@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { proxySpeech, speechStatus } from '../bridge/speech.mjs'
+process.env.SYSTEMAI_API_TOKEN = 'fixture-access-' + 'a'.repeat(64)
 
 const wav = Buffer.from('RIFF1234WAVEaudio')
 async function invoke(kind, body = kind === 'tts' ? '{"text":"hello"}' : 'audio', type = kind === 'tts' ? 'application/json' : 'audio/webm;codecs=opus', connected = true) {
@@ -102,7 +103,7 @@ test('mixed speech providers use server keys, bounded audio and shared reservati
         calls = []; failure = scenario
         const response = await invoke('stt')
         assert.equal(response.status, 503)
-        assert.equal(calls.length, scenario === 'budget' ? 1 : 2)
+        assert.equal(calls.length, scenario === 'budget' ? 1 : 3)
         assert.ok(!String(response.data).includes('private') && !String(response.data).includes('test-deepgram'))
       }
       failure = ''
@@ -112,13 +113,13 @@ test('mixed speech providers use server keys, bounded audio and shared reservati
       for (const provider of ['cartesia', 'sarvam']) {
         process.env.SYSTEMAI_TTS_PROVIDER = provider; calls = []
         assert.equal((await invoke('tts')).status, 503)
-        assert.equal(calls.length, 2)
+        assert.equal(calls.length, 3)
       }
       calls = []
       const response = await invoke('stt')
       assert.equal(response.status, 503)
       assert.ok(!String(response.data).includes('private'))
-      assert.equal(calls.length, 2)
+      assert.equal(calls.length, 3)
     })
   } finally {
     globalThis.fetch = transport

@@ -21,6 +21,7 @@ async def test_pending_approval_survives_runtime_restart(tmp_path: Path):
     session = await first.create_developer_task("Start the project", project, autonomy_mode="assist")
     assert session.state.value == "waiting_for_approval"
 
+    first.close()
     restarted = build_runtime(data_dir=data_dir)
     restored = restarted.sessions[session.task_id]
     assert restored.state.value == "waiting_for_approval"

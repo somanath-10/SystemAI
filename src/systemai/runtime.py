@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from weakref import finalize
 
 from systemai.config import Settings
 from systemai.cost import CostBudget, CostController
@@ -19,6 +20,7 @@ from systemai.orchestration import ActionJournal, EventStore, ResourceLeaseManag
 from systemai.monitoring import EventBus, ProcessMonitor
 from systemai.planner import DeveloperDiagnosisPlanner
 from systemai.security import ApprovalStore, CapabilitySigner, CapabilityVerifier, SecurityKernel
+from systemai.security.local_access import RuntimeOwnership
 from systemai.verification import PostconditionVerifier
 
 
@@ -32,6 +34,22 @@ def build_runtime(
     desktop_client: DesktopToolClient | None = None,
     settings: Settings | None = None,
 ) -> SystemAIRuntime:
+    data_dir = Path(data_dir).expanduser().resolve(strict=False)
+    data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    data_dir.chmod(0o700)
+    ownership = RuntimeOwnership(data_dir)
+    try:
+        runtime = _build_runtime(data_dir=data_dir, autonomy_mode=autonomy_mode, desktop_client=desktop_client, settings=settings)
+    except BaseException:
+        ownership.close()
+        raise
+    runtime._ownership = ownership
+    finalize(runtime, ownership.close)
+    return runtime
+
+
+def _build_runtime(*, data_dir: Path, autonomy_mode: str | None, desktop_client: DesktopToolClient | None,
+                   settings: Settings | None) -> SystemAIRuntime:
     settings = settings or Settings()
     data_dir = Path(data_dir).expanduser().resolve(strict=False)
     data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)

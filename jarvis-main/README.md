@@ -1,6 +1,6 @@
 # SystemAI holographic workspace
 
-The supplied Jarvis interface is now the main SystemAI UI. Claude SDK/authentication and browser-side API keys have been removed. OpenAI Responses, speech, search and images go through the Python runtime; additional speech providers and configured MCP tools use the Node bridge and shared Python budget ledger.
+The supplied Jarvis interface is now the main SystemAI UI. Claude SDK/authentication and browser-side provider API keys have been removed. OpenAI Responses, speech, search and images go through the Python runtime; additional speech providers and configured MCP tools use the Node bridge and shared Python budget ledger.
 
 ## Start
 
@@ -15,6 +15,8 @@ make dev
 Node 20.19.x or 22.12+ is required. Open http://127.0.0.1:5802. The launcher starts/reuses the compatible API on 8765 and starts the bridge on 8787. It will not silently switch UI ports. Use Message for typed interaction and Task Center for diagnosis, canonical approvals, browser/desktop tasks, local inference, memory and cost controls.
 
 ## Retained features
+
+Unlock with your local workspace access key, generated in `SYSTEMAI_DATA_DIR/keys/local-api-token` (owner-only file), or configured privately as `SYSTEMAI_API_TOKEN`. It is not a provider key and is never bundled. API callers and bridge WebSockets must authenticate. The browser keeps the key for the tab session; authenticated media uses a separate read-only credential. See [local access and ownership](../docs/guides/ASSISTANT_WORKFLOW.md#local-access-ownership-and-deadlines).
 
 - Three.js/GLSL reactor, particles, orbiting media, phase colours, animation, boot sequence, sounds and music.
 - Continuous voice detection, wake phrase, transcript burst assembly, follow-up listening, barge-in, queued speech and mouth/reactor animation.

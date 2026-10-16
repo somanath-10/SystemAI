@@ -1,6 +1,7 @@
 import type { AskHandlers } from './conversation'
 import type { Blade, Panel } from '../store'
 import { BRIDGE_WS_URL } from '../config'
+import { accessKey, accessHeaders, operationTimeoutMs, saveMediaKey, expireAccessKey } from '../../../apps/desktop/ui/src/api'
 import { assistantProvider, selectedTaskId, selectTask, setAssistantSession } from '../../../apps/desktop/ui/src/taskContext'
 
 /**
@@ -35,6 +36,7 @@ type Frame = {
   when?: string
   servers?: Array<string | { name?: string }>
   session_id?: string
+  media_token?: string
   task_id?: string
   interrupted?: boolean
 }
@@ -57,7 +59,7 @@ let connecting: Promise<WebSocket> | null = null
 let servers: string[] = []
 let sessionId = ''
 let activeAsk: string | null = null
-export const speechHeaders = () => ({ 'x-systemai-session': sessionId })
+export const speechHeaders = () => ({ ...accessHeaders(), 'x-systemai-session': sessionId })
 export const bridgeServers = () => servers
 
 /** The list arrives twice — once from config, once with live status — so the
@@ -177,7 +179,9 @@ function dispatch(ws: WebSocket) {
     const msg = parseFrame(e.data)
     if (!msg) return
 
-    if (msg.type === 'ready') {
+    if (msg.type === 'authenticated') {
+      if (typeof msg.media_token === 'string' && /^[0-9a-f]{64}$/.test(msg.media_token)) saveMediaKey(msg.media_token)
+    } else if (msg.type === 'ready') {
       if (typeof msg.session_id === 'string' && msg.session_id) { sessionId = msg.session_id; setAssistantSession(sessionId) }
       // MCP connections and provider readiness arrive independently.
       if (Array.isArray(msg.servers)) servers = msg.servers
@@ -231,6 +235,7 @@ function connect(): Promise<WebSocket> {
 
   connecting = new Promise<WebSocket>((resolve, reject) => {
     const ws = new WebSocket(BRIDGE_WS_URL)
+    const key = accessKey()
     let settled = false
 
     /**
@@ -254,6 +259,7 @@ function connect(): Promise<WebSocket> {
     }, 6000)
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'authenticate', token: key }))
       socket = ws
       attempt = 0
       dispatch(ws)
@@ -284,14 +290,18 @@ function connect(): Promise<WebSocket> {
         ),
       )
     }
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       // A close before open is just a failed dial; after open it's a lost
       // session, and the two want different handling.
       settle(new Error('The bridge closed the connection.'))
       if (socket === ws) {
         socket = null
+        sessionId = ''
+        servers = []
+        onServers?.(servers)
         onConnection?.('lost')
-        scheduleReconnect()
+        if (event.code === 1008) expireAccessKey(key)
+        else scheduleReconnect()
       }
     }
   })
@@ -315,12 +325,8 @@ export async function warmBridge(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * No frame of any kind for two minutes means the turn is never coming back.
- * Generous on purpose: a long agent run can sit silent through a slow tool,
- * and cutting a real answer off is worse than waiting. What this catches is
- * the case that used to hang forever — the bridge alive but the turn lost.
+ * Allow the backend operation deadline plus a delivery margin for slow tools.
  */
-const IDLE_TIMEOUT_MS = 120_000
 
 /** The turn in flight, so a barge-in can settle it locally. */
 let pending: { finish: (fallback?: string) => void } | null = null
@@ -412,7 +418,7 @@ export async function ask(
       clearTimeout(timer)
       timer = window.setTimeout(() => {
         fail(new Error('The bridge went quiet — that turn was lost, sir.'))
-      }, IDLE_TIMEOUT_MS)
+      }, operationTimeoutMs() + 10_000)
     }
 
     const onMessage = (e: MessageEvent) => {

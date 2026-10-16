@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore, type Blade } from '../store'
-import { BRIDGE_HTTP_URL } from '../config'
+import { BRIDGE_HTTP_URL, bridgeMediaURL } from '../config'
 import { sanitisePanelHtml } from './sanitise'
 import { frameSpan, peaceScroll, pinchCount } from '../lib/hands'
 import * as camera from '../lib/camera'
+import { useMediaKey } from '../lib/useMediaKey'
 
 /**
  * The blades.
@@ -52,16 +53,16 @@ function viaBridge(raw: string, route: 'img' | 'media'): string {
   if (!src) return ''
   const path = src.replace(/^file:\/\//, '')
   if (DISK_PATH.test(path)) {
-    return `${BRIDGE_HTTP_URL}/file?path=${encodeURIComponent(path)}`
+    return bridgeMediaURL(`${BRIDGE_HTTP_URL}/file?path=${encodeURIComponent(path)}`)
   }
   if (!/^https?:\/\//i.test(src)) return src
-  if (src.startsWith(`${BRIDGE_HTTP_URL}/`)) return src
-  return `${BRIDGE_HTTP_URL}/${route}?url=${encodeURIComponent(src)}`
+  if (src.startsWith(`${BRIDGE_HTTP_URL}/`)) return bridgeMediaURL(src)
+  return bridgeMediaURL(`${BRIDGE_HTTP_URL}/${route}?url=${encodeURIComponent(src)}`)
 }
 
 /** A whole document, rendered by the bridge so it can be framed at all. */
 const pageUrl = (url: string, mode: 'reader' | 'live') =>
-  `${BRIDGE_HTTP_URL}/page?mode=${mode}&url=${encodeURIComponent(url)}`
+  bridgeMediaURL(`${BRIDGE_HTTP_URL}/page?mode=${mode}&url=${encodeURIComponent(url)}`)
 
 /**
  * The three embed hosts, and only these.
@@ -158,6 +159,7 @@ const CameraView = memo(function CameraView() {
 })
 
 const Body = memo(function Body({ blade }: { blade: Blade }) {
+  const credential = useMediaKey()
   if (blade.kind === 'camera') return <CameraView />
 
   if (blade.kind === 'article' && blade.url) {
@@ -226,6 +228,7 @@ const Body = memo(function Body({ blade }: { blade: Blade }) {
     // There is one sanitiser, and this is it.
     return (
       <div
+        key={credential}
         className="bl-markup p-body"
         dangerouslySetInnerHTML={{ __html: sanitisePanelHtml(blade.html) }}
       />

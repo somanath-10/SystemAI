@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings
@@ -76,6 +76,7 @@ def test_openai_timeout_keeps_reservation_across_restart(tmp_path: Path) -> None
     assert client.post(endpoint, json={"prompt": "hello", "confirm_external": True}).status_code == 503
     record = client.get(f"/tasks/{task_id}/cost").json()["records"][0]
     assert record["metadata"]["billing_state"] == "reserved"
+    client.app.state.runtime.close()
     restarted = _client(tmp_path, calls=2)
     restarted.app.state.runtime.openai.transport = httpx.MockTransport(fail)
     assert restarted.post(endpoint, json={"prompt": "again", "confirm_external": True}).status_code == 409
@@ -125,6 +126,7 @@ def test_old_zero_budget_task_stays_zero_budget_after_cloud_enabled(tmp_path: Pa
     disabled = TestClient(create_app(tmp_path / "data", settings=Settings(_env_file=None)),
                           base_url="http://127.0.0.1:8765")
     task_id = _task(disabled, tmp_path)
+    disabled.app.state.runtime.close()
     enabled = _client(tmp_path)
     assert enabled.get(f"/tasks/{task_id}/cost").json()["budget"]["max_external_calls"] == 0
     assert enabled.post(f"/tasks/{task_id}/inference/openai",

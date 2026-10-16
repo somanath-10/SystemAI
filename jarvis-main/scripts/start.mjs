@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { ROOT, API } from '../bridge/config.mjs'
+import { ROOT } from '../bridge/config.mjs'
+import { reuseLocalApi } from './api-ready.mjs'
 import './vendor.mjs'
 
 if (process.argv.includes('--writes')) throw new Error('Direct-write bypass was removed; use signed SystemAI tasks and Task Center approvals')
@@ -24,15 +25,7 @@ function run(name, command, args, cwd, env = {}) {
 }
 process.on('SIGINT', () => stop())
 process.on('SIGTERM', () => stop())
-let runningApi = false
-try {
-  const response = await fetch(API + '/openapi.json', { signal: AbortSignal.timeout(1500) })
-  const schema = await response.json()
-  runningApi = Boolean(schema.paths?.['/assistant/sessions'])
-  if (!runningApi) throw new Error('An older API is running on 8765; restart it before launching the workspace')
-} catch (error) {
-  if (error.message.includes('older API')) throw error
-}
+const runningApi = await reuseLocalApi()
 if (!runningApi) {
   const python = resolve(ROOT, '.venv/bin/python')
   if (!existsSync(python)) throw new Error('Install the Python project into .venv before starting: python3 -m venv .venv && .venv/bin/pip install -e .[dev,browser]')

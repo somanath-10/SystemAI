@@ -2,7 +2,7 @@ from pathlib import Path
 import asyncio
 
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings
@@ -38,6 +38,7 @@ def test_monitor_rules_are_durable_and_deduplicate_alerts(tmp_path: Path) -> Non
     assert client.post(f"/monitor/rules/{rule['rule_id']}/state", json={"enabled": False}).status_code == 200
     assert client.app.state.runtime.store.verify_chain()
 
+    client.app.state.runtime.close()
     restored = TestClient(create_app(tmp_path, settings=settings), base_url="http://127.0.0.1:8765")
     assert restored.get("/monitor/rules").json()["items"][0]["enabled"] is False
 

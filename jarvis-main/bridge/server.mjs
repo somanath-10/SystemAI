@@ -1,9 +1,10 @@
 /** SystemAI holographic bridge: UI tools, MCP, media and OpenAI speech through the Python API. */
 
 import { WebSocketServer } from 'ws'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { attachAgent } from './agent.mjs'
 import { permittedTool } from './policy.mjs'
-import { api, ROOT } from './config.mjs'
+import { api, ROOT, validAccessKey } from './config.mjs'
 import { proxySpeech, speechStatus } from './speech.mjs'
 import { chromeAvailable } from './chrome.mjs'
 import { homedir, tmpdir } from 'node:os'
@@ -16,6 +17,7 @@ import { renderPage } from './page.mjs'
 const PORT = Number(process.env.SYSTEMAI_BRIDGE_PORT || process.env.JARVIS_BRIDGE_PORT || 8787)
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('Bridge port must be an integer from 1 to 65535')
 const speechSessions = new Set()
+const mediaToken = randomBytes(32).toString('hex')
 
 /**
  * A crash here takes the whole assistant down mid-sentence, and most of what
@@ -406,7 +408,8 @@ function corsFor(req) {
   const headers = { vary: 'origin' }
   if (origin) {
     headers['access-control-allow-origin'] = origin
-    headers['access-control-allow-headers'] = 'content-type,x-systemai-session'
+    headers['access-control-allow-headers'] = 'content-type,x-systemai-session,authorization'
+    headers['access-control-allow-credentials'] = 'true'
   }
   return headers
 }
@@ -422,10 +425,25 @@ const handleRequest = async (req, res) => {
     return res.end('forbidden')
   }
   const cors = corsFor(req)
+  res.setHeader('referrer-policy', 'no-referrer')
 
   if (req.method === 'OPTIONS') {
+    res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS')
     res.writeHead(204, cors)
     return res.end()
+  }
+
+  const bearer = req.headers.authorization?.replace(/^Bearer /, '')
+  const cookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('systemai_access='))?.slice('systemai_access='.length)
+  if (req.method === 'POST' && req.url === '/authenticate') {
+    if (!validAccessKey(bearer)) { res.writeHead(401, cors); return res.end('local access key required') }
+    res.writeHead(200, { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store', 'set-cookie': `systemai_access=${mediaToken}; HttpOnly; SameSite=Strict; Path=/` })
+    return res.end(JSON.stringify({ media_token: mediaToken }))
+  }
+  const validMedia = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value) && timingSafeEqual(Buffer.from(value), Buffer.from(mediaToken))
+  const mediaAccess = req.method === 'GET' && (validMedia(cookie) || validMedia(new URL(req.url, 'http://loopback').searchParams.get('media_token')))
+  if (req.url !== '/health' && !validAccessKey(bearer) && !mediaAccess) {
+    res.writeHead(401, { ...cors, 'cache-control': 'no-store' }); return res.end('local access key required')
   }
 
   if (req.method === 'GET' && req.url === '/health') {
@@ -534,7 +552,7 @@ const handleRequest = async (req, res) => {
     const target = asked.searchParams.get('url') ?? ''
     const mode = asked.searchParams.get('mode') === 'live' ? 'live' : 'reader'
     try {
-      const page = await renderPage(target, mode, `http://localhost:${PORT}`)
+      const page = await renderPage(target, mode, `http://${req.headers.host}`, mediaToken)
       res.writeHead(200, { ...cors, ...page.headers })
       return res.end(page.body)
     } catch (err) {
@@ -628,7 +646,18 @@ console.log(
 
 wss.on('connection', (socket) => {
   const ownedSessions = new Set()
-  attachAgent(socket, { instructions: SYSTEM_PROMPT, permitted: permittedTool,
-    onSession: (id) => { if (socket.readyState === socket.OPEN) { ownedSessions.add(id); speechSessions.add(id) } } })
+  const timer = setTimeout(() => socket.close(1008, 'authentication required'), 5000)
+  socket.once('message', (data) => {
+    clearTimeout(timer)
+    let frame
+    try { frame = JSON.parse(data.toString()) } catch { socket.close(1008, 'authentication required'); return }
+    if (frame?.type !== 'authenticate' || typeof frame.token !== 'string' || !validAccessKey(frame.token)) {
+      socket.close(1008, 'authentication required'); return
+    }
+    socket.send(JSON.stringify({ type: 'authenticated', media_token: mediaToken }))
+    attachAgent(socket, { instructions: SYSTEM_PROMPT, permitted: permittedTool,
+      onSession: (id) => { if (socket.readyState === socket.OPEN) { ownedSessions.add(id); speechSessions.add(id) } } })
+  })
+  socket.on('close', () => clearTimeout(timer))
   socket.on('close', () => { for (const id of ownedSessions) speechSessions.delete(id) })
 })

@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion, type Variants } from 'framer-motion'
 import { useStore, type Panel } from '../store'
 import { sanitisePanelHtml } from './sanitise'
+import { useMediaKey } from '../lib/useMediaKey'
 
 /**
  * Heads-up display panels.
@@ -103,7 +104,8 @@ function replaceWithNote(el: Element, text: string) {
  * enough, and it is what keeps the sanitise pass below from running per frame.
  */
 const Card = memo(function Card({ panel }: { panel: Panel }) {
-  const html = useMemo(() => sanitisePanelHtml(panel.html ?? ''), [panel.html])
+  useMediaKey() // Rebuild media URLs when the bridge restarts.
+  const html = sanitisePanelHtml(panel.html ?? '')
 
   // An empty body renders as a large blank rectangle, which looks like the
   // interface is broken rather than like nothing was sent. Say so instead.

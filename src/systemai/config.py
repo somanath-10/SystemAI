@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path.home() / ".systemai" / "runtime"
     api_host: str = "127.0.0.1"
     api_port: int = 8765
+    api_token: SecretStr = SecretStr("")
     autonomy_mode: str = "standard_auto"
     allowed_roots: str = f"{Path.home() / 'Documents'}:{Path.home() / 'Downloads'}:/tmp"
     enable_browser: bool = False

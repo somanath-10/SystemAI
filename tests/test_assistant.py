@@ -5,7 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
+from conftest import TestClient
 
 from systemai.api.local_server import create_app
 from systemai.config import Settings
@@ -33,7 +33,7 @@ def test_speech_budget_is_shared_and_enforced_without_openai(tmp_path: Path):
     session = client.post('/assistant/sessions').json()['task_id']
     budget = client.get(f'/tasks/{session}/cost').json()['budget']
     assert budget['max_external_cost_usd'] == 5
-    reserve = {'phase': 'reserve', 'provider': 'deepgram', 'feature': 'stt', 'estimated_cost_usd': 4.99, 'audio_seconds': 30}
+    reserve = {'phase': 'reserve', 'worker_id': '00000000-0000-4000-8000-000000000001', 'provider': 'deepgram', 'feature': 'stt', 'estimated_cost_usd': 4.99, 'audio_seconds': 30}
     record = client.post(f'/tasks/{session}/assistant/external-usage', json=reserve).json()
     assert client.post(f'/tasks/{session}/assistant/external-usage', json={**reserve, 'phase': 'settle', **record}).status_code == 200
     over_budget = {**reserve, 'provider': 'cartesia', 'feature': 'tts', 'estimated_cost_usd': 0.02}
@@ -146,16 +146,19 @@ def test_child_tasks_share_conversation_costs_and_survive_restart(tmp_path: Path
     child_id = child['task_id']
     assert child['parent_task_id'] == session
     assert client.get(f'/tasks/{child_id}/cost').json()['cost_task_id'] == session
-    reserve = {'phase': 'reserve', 'provider': provider, 'feature': 'read_status', 'estimated_cost_usd': 0.02}
+    reserve = {'phase': 'reserve', 'worker_id': '00000000-0000-4000-8000-000000000001', 'provider': provider, 'feature': 'read_status', 'estimated_cost_usd': 0.02}
     record = client.post(f'/tasks/{child_id}/assistant/external-usage', json=reserve).json()
     assert client.get(f'/tasks/{session}/cost').json()['totals']['external_calls'] == 1
-    assert client.post(f'/tasks/{session}/assistant/external-usage', json=reserve).status_code == 409
+    concurrent = client.post(f'/tasks/{session}/assistant/external-usage', json=reserve)
+    assert concurrent.status_code == 200
+    assert client.post(f'/tasks/{session}/assistant/external-usage', json={**reserve, 'phase': 'settle', **concurrent.json()}).status_code == 200
     settle = {**reserve, 'phase': 'settle', **record}
     assert client.post(f'/tasks/{child_id}/assistant/external-usage', json=settle).status_code == 200
     assert client.post(f'/tasks/{child_id}/assistant/external-usage', json=settle).status_code == 409
-    assert client.get(f'/tasks/{child_id}/cost').json()['totals']['external_cost_usd'] == 0.02
+    assert client.get(f'/tasks/{child_id}/cost').json()['totals']['external_cost_usd'] == 0.04
     assert any(item['task_id'] == child_id for item in client.get('/tasks').json()['items'])
     from systemai.runtime import build_runtime
+    client.app.state.runtime.close()
     restored = build_runtime(data_dir=tmp_path / 'data', settings=Settings(_env_file=None))
     assert restored.sessions[child_id].parent_task_id == session
     assert restored.cost_task_id(child_id) == session

@@ -12,5 +12,6 @@ export default defineConfig({
   optimizeDeps: { exclude: ["kokoro-js", "phonemizer", "@huggingface/transformers"] },
   preview: { host: "127.0.0.1", port: 5802, strictPort: true },
   server: { host: "127.0.0.1", port: 5802, strictPort: true,
-    fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))] } },
+    fs: { allow: [fileURLToPath(new URL("../../../", import.meta.url))],
+      deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/keys/local-api-token", "**/*.sqlite3", "**/*.sqlite3-*", "**/runtime.lock"] } },
 });

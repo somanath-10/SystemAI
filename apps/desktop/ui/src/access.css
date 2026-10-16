@@ -1,0 +1,9 @@
+.access-screen { min-height: 100vh; display: grid; place-items: center; margin: 0; background: #03080e; color: #d7f9ff; font: 15px/1.5 system-ui, sans-serif; }
+.access-card { width: min(360px, 85vw); padding: 36px; border: 1px solid #16404d; border-radius: 24px; background: #07121d; box-shadow: 0 0 80px #00c9e91c; }
+.access-orb { width: 60px; height: 60px; margin: 0 auto 24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #d9ffff, #05b8d9 35%, #004563 75%); box-shadow: 0 0 45px #04c8e966; }
+.access-card h1 { font-size: 22px; text-align: center; }
+.access-card input { box-sizing: border-box; width: 100%; margin: 10px 0; padding: 12px; border: 1px solid #236171; border-radius: 10px; background: #020a11; color: #d7f9ff; }
+.access-card p { color: #8eb3c1; font-size: 12px; }
+.access-card button { width: 100%; padding: 12px; margin-top: 12px; border: 1px solid #2dd4eb; border-radius: 10px; background: #073749; color: #d7f9ff; cursor: pointer; }
+.access-card button:disabled { opacity: .5; cursor: wait; }
+.access-card :focus-visible { outline: 2px solid #b5f8ff; outline-offset: 3px; }

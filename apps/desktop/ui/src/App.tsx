@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { assistantSessionId, selectedTaskId, selectTask } from "./taskContext";
 import { TaskTools } from "./TaskTools";
+import { API, apiFetch as fetch } from './api';
 
 type Step = {
   node_id: string;
@@ -29,7 +30,6 @@ type Mode = "project" | "browser" | "desktop" | "ai";
 type CostSummary = { budget: { max_external_cost_usd: number; max_external_calls: number; max_external_vision_calls: number }; totals: { local_calls: number; external_calls: number; external_cost_usd: number } };
 type InferenceStatus = { connected: boolean; models: Record<string, boolean>; installed_models?: string[]; openai?: { configured: boolean; model: string | null } };
 
-const API = import.meta.env.VITE_SYSTEMAI_API ?? "http://127.0.0.1:8765";
 const SATELLITES = Array.from({ length: 14 }, (_, index) => index);
 
 export default function App() {

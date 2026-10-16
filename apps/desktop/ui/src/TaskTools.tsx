@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { apiFetch as fetch, operationTimeoutMs } from './api';
 
 type History = { task_id: string; objective: string; state: string; parent_task_id?: string | null };
 type Rule = { rule_id: string; event_type: string; process_name: string; enabled: boolean };
@@ -29,7 +30,7 @@ export function TaskTools({ api, taskId, onSelect }: { api: string; taskId?: str
   const [busy, setBusy] = useState(false);
 
   async function request<T>(path: string, body?: object, method = body ? "POST" : "GET"): Promise<T> {
-    const response = await fetch(api + path, { method, signal: AbortSignal.timeout(60_000),
+    const response = await fetch(api + path, { method, signal: AbortSignal.timeout(body ? operationTimeoutMs() : 60_000),
       ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
     if (!response.ok) {
       const failure = await response.json().catch(() => null);

@@ -571,6 +571,8 @@ class SystemAIRuntime:
         return session
 
     async def run(self, task_id: str) -> TaskSession:
+        if getattr(self, "_closed", False):
+            raise RuntimeError("Runtime is closed")
         session = self.sessions[task_id]
         async with session.lock:
             if session.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED, TaskState.PAUSED, TaskState.USER_TAKEOVER}:
@@ -889,6 +891,13 @@ class SystemAIRuntime:
             except Exception as exc:
                 self.store.append("TaskRestoreFailed", {"error": f"{type(exc).__name__}: {exc}"}, task_id=record["task_id"])
         return restored
+
+    def close(self) -> None:
+        if any(session.lock.locked() for session in self.sessions.values()):
+            raise RuntimeError("Cannot close a runtime while a task is executing")
+        self._closed = True
+        if ownership := getattr(self, "_ownership", None):
+            ownership.close()
 
     @staticmethod
     def _action_from_snapshot(value: dict[str, Any]):

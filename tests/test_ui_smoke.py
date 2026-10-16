@@ -35,19 +35,29 @@ async def test_orb_and_task_modal() -> None:
             notes, rules, requests = [], [], []
             sockets, page_errors, creations = [], [], []
             page.on("pageerror", lambda error: page_errors.append(str(error)))
+            access_token = 'fixture-access-' + 'a' * 64
+            reject_access = False
+            await page.route("http://127.0.0.1:8787/authenticate", lambda route: route.fulfill(status=200, content_type='application/json', body=json.dumps({'media_token': 'b' * 64}), headers={"access-control-allow-origin": f"http://127.0.0.1:{server.server_port}", "access-control-allow-credentials": "true", "access-control-allow-headers": "authorization", "access-control-allow-methods": "POST"}))
 
             def bridge_fixture(socket):
                 sockets.append(socket)
+                socket.send(json.dumps({"type": "authenticated", "media_token": "c" * 64}))
                 socket.send(json.dumps({"type": "ready", "session_id": "task_assistant", "servers": ["SystemAI"]}))
 
             await page.route_web_socket("ws://127.0.0.1:8787/", bridge_fixture)
 
             async def api_fixture(route):
                 path = urlsplit(route.request.url).path
+                if route.request.method != 'OPTIONS':
+                    assert route.request.headers.get('authorization') == 'Bearer ' + access_token
+                    if reject_access:
+                        await route.fulfill(status=401, content_type='application/json', headers={"access-control-allow-origin": "*"}, body='{"detail":"Unauthorized"}')
+                        return
                 body = route.request.post_data_json if route.request.post_data else {}
                 requests.append((path, route.request.method, body))
                 payload = {"items": []}
-                if path == "/desktop/status": payload = {"available": False, "allowed_applications": []}
+                if path == '/auth/check': payload = {'authenticated': True, 'operation_timeout_ms': 250_000}
+                elif path == "/desktop/status": payload = {"available": False, "allowed_applications": []}
                 elif path == "/browser/status": payload = {"available": True, "configured": True, "allowed_origins": ["http://127.0.0.1:5802"]}
                 elif path == "/inference/status": payload = {"models": {"local_embedding": True}}
                 elif path == "/tasks/browser" or path == "/tasks/task_manual": payload = task
@@ -75,6 +85,10 @@ async def test_orb_and_task_modal() -> None:
 
             await page.route("http://127.0.0.1:8765/**", api_fixture)
             await page.goto(f"http://127.0.0.1:{server.server_port}/?view=tasks")
+            assert await page.get_by_role('heading', name='Unlock workspace').is_visible()
+            await page.get_by_label('Local access key').fill(access_token)
+            await page.get_by_role('button', name='Unlock', exact=True).click()
+            await page.get_by_role('button', name='New task', exact=True).wait_for()
             assert await page.locator(".satellite").count() == 14
             assert not await page.get_by_label("Project directory").is_visible()
 
@@ -93,6 +107,10 @@ async def test_orb_and_task_modal() -> None:
             assert not await page.get_by_label("Page URL").is_visible()
             await page.goto(f"http://127.0.0.1:{server.server_port}/")
             await page.wait_for_function("sessionStorage.getItem('systemai.assistantSession') === 'task_assistant'")
+            await page.wait_for_function("sessionStorage.getItem('systemai.mediaKey') === 'c'.repeat(64)")
+            sockets[0].send(json.dumps({"type": "authenticated", "media_token": "invalid"}))
+            sockets[0].send(json.dumps({"type": "authenticated", "media_token": "d" * 64}))
+            await page.wait_for_function("sessionStorage.getItem('systemai.mediaKey') === 'd'.repeat(64)")
             await page.locator('canvas:not(.hands-canvas)').wait_for(state='visible')
             assert await page.locator('canvas:not(.hands-canvas)').count() == 1
             assert await page.get_by_role('button', name='INITIALISE').is_visible()
@@ -147,6 +165,20 @@ async def test_orb_and_task_modal() -> None:
             assert any(path.endswith('/skill-candidate/review') and body['candidate_hash'] == 'fixture_hash' for path, method, body in requests)
             await frame.get_by_role('button', name='Close workspace tools').click()
             await page.get_by_role('button', name='Close Task Center').click()
+            reject_access = True
+            await page.get_by_role('button', name='Task Center', exact=True).click()
+            await page.get_by_role('heading', name='Unlock workspace').wait_for(state='visible')
+            assert await page.evaluate("sessionStorage.getItem('systemai.accessKey')") == ''
+            assert await page.evaluate("sessionStorage.getItem('systemai.mediaKey')") == ''
+            reject_access = False
+            await page.get_by_label('Local access key').fill(access_token)
+            await page.get_by_role('button', name='Unlock', exact=True).click()
+            await page.get_by_role('button', name='INITIALISE').wait_for(state='visible')
+            await page.wait_for_function("sessionStorage.getItem('systemai.mediaKey') === 'c'.repeat(64)")
+            await sockets[-1].close(code=1008, reason='authentication required')
+            await page.get_by_role('heading', name='Unlock workspace').wait_for(state='visible')
+            assert await page.evaluate("sessionStorage.getItem('systemai.accessKey')") == ''
+            assert not page_errors
             await browser.close()
     finally:
         server.shutdown()

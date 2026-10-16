@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
+from time import monotonic
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
@@ -84,6 +85,26 @@ class CostController:
         self._records: list[UsageRecord] = []
         self._lock = Lock()
         self._active_external: set[str] = set()
+        self._external_leases: dict[str, tuple[str, float]] = {}
+
+    def _expire_leases(self) -> None:
+        for call_id, (_, deadline) in list(self._external_leases.items()):
+            if deadline <= monotonic():
+                self._external_leases.pop(call_id)
+                self._active_external.discard(call_id)
+
+    def lease_external(self, call_id: str, worker_id: str) -> None:
+        with self._lock:
+            if call_id not in self._active_external:
+                raise ValueError("external call is not active")
+            self._external_leases[call_id] = (worker_id, monotonic() + 90)
+
+    def renew_external(self, call_id: str, worker_id: str) -> None:
+        with self._lock:
+            self._expire_leases()
+            if call_id not in self._external_leases or self._external_leases[call_id][0] != worker_id:
+                raise ValueError("external worker lease is missing or expired")
+            self._external_leases[call_id] = (worker_id, monotonic() + 90)
 
     def set_budget(self, task_id: str, budget: CostBudget) -> None:
         with self._lock:
@@ -126,6 +147,7 @@ class CostController:
         budget = self.budget_for(task_id)
         totals = self.totals_for(task_id)
         with self._lock:
+            self._expire_leases()
             active = tuple(self._active_external)
         if self.store is not None and self.store.has_unsettled_external(task_id, active_calls=active):
             return False, "previous external charge is unresolved"
@@ -148,6 +170,7 @@ class CostController:
         pending = record.model_copy(deep=True)
         pending.metadata["billing_state"] = "reserved"
         with self._lock:
+            self._expire_leases()
             reason = self.store.reserve_external_model_call(
                 pending.model_dump(mode="json"), max_cost=budget.max_external_cost_usd,
                 max_calls=budget.max_external_calls, max_vision_calls=budget.max_external_vision_calls,
@@ -177,6 +200,7 @@ class CostController:
         """Keep an uncertain reservation held; only release its active-request marker."""
         with self._lock:
             self._active_external.discard(call_id)
+            self._external_leases.pop(call_id, None)
 
     def require_external_budget(self, task_id: str, **kwargs) -> None:
         allowed, reason = self.can_use_external(task_id, **kwargs)

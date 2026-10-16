@@ -10,6 +10,12 @@ __pycache__/
 .env.local
 .env.*.local
 config/mcp.json
+**/keys/local-api-token
+**/keys/capability-ed25519.pem
+runtime.lock
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 node_modules/
 dist/
 target/
